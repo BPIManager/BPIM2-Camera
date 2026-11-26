@@ -94,8 +94,9 @@ export default defineConfig({
       workbox: {
         // 大きいもの（OCR のモデル・WASM）は事前取得せず、初めて使ったときに保存する
         globPatterns: ["**/*.{js,css,html,png,json}"],
-        // サインインページはアプリ本体に置き換えず、そのまま取得する
-        navigateFallbackDenylist: [/^\/signin\.html/],
+        // サインインページと Firebase の中継（/__/auth/handler など）はアプリ本体に置き換えず、そのまま取得する
+        // （/__/ を除外しないと、プロバイダからの戻りの遷移に index.html が返り、サインインが完了しない）
+        navigateFallbackDenylist: [/^\/signin\.html/, /^\/__\//],
         globIgnores: ["models/paddle/**"],
         runtimeCaching: [
           {
