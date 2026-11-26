@@ -4,6 +4,7 @@ import type { Size } from "@/lib/vision/framing";
 import { resolveLayout } from "@/lib/vision/guides";
 import AccountSection from "./AccountSection";
 import CameraPicker from "@/components/camera-picker";
+import DebugSection from "./DebugSection";
 import LicensesSection from "./LicensesSection";
 import ConfirmDialog from "@/components/confirm-dialog";
 import GuideEditor from "./GuideEditor";
@@ -155,7 +156,11 @@ export default function SettingsView({ settings, update, viewSize, installable, 
           履歴を削除
         </Button>
       </div>
+      <Row id="debug" label="デバッグモード" hint="オンにすると、OCR の読み取り結果（JSON）を、この画面の一番下で確認できます">
+        <Switch id="debug" checked={settings.debugMode} onCheckedChange={(v) => update({ debugMode: v })} />
+      </Row>
       <LicensesSection />
+      {settings.debugMode && <DebugSection />}
       <ConfirmDialog
         open={confirm === "samples"}
         onClose={() => setConfirm(null)}

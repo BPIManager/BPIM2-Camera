@@ -16,7 +16,7 @@ import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
 import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
 import { WorkerOcrEngine } from "@/lib/recognition/paddle/workerEngine";
 import { isAbortError, raceAbort } from "@/lib/async/abort";
-import { logDebug, saveCaptures } from "@/lib/debug/ocrLog";
+import { logDebug, saveCaptures, setDebugMode } from "@/lib/debug/ocrLog";
 import type { Recognizer, SongProgress } from "@/lib/recognition/recognizer";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { resolveResult } from "@/lib/recognition/resolve";
@@ -38,6 +38,10 @@ const HEADED_TABS: readonly Tab[] = ["history", "settings"];
 export default function App() {
   const { settings, update } = useSettings();
   useSampleUpload(settings);
+  // デバッグモード。オンの間だけ、読み取り結果を貯める（設定画面で見る）
+  useEffect(() => {
+    setDebugMode(settings.debugMode);
+  }, [settings.debugMode]);
   const { songs } = useMaster();
   const [tab, setTab] = useState<Tab>("camera");
   const [draft, setDraft] = useState<Draft | null>(null);

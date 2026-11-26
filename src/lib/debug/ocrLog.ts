@@ -1,7 +1,7 @@
 import type { OcrLine } from "@/lib/recognition/paddle/engine";
 
 /** 認識ロジックの版。コードを変えたら更新する（スマホが古いコードのままかを、ログで見分けるため） */
-export const OCR_REV = "r17 短い断片は競合にしない・曲名の差が大きければ確定";
+export const OCR_REV = "r18 曲名が決まらないとき、傾きを直して読み直す";
 
 export interface OcrDebugEntry {
   title: readonly OcrLine[];
@@ -11,6 +11,38 @@ export interface OcrDebugEntry {
   result: unknown;
   ms: number;
 }
+
+/** 設定画面のデバッグモード。オンの間だけ、読み取り結果を貯めて画面で見られるようにする（本番ビルドでも使える） */
+let debugEnabled = false;
+export const setDebugMode = (on: boolean): void => {
+  debugEnabled = on;
+  if (!on) entries = [];
+  emit();
+};
+
+/** 画面で見るために貯める件数（新しい順に、これだけ残す） */
+const MAX_ENTRIES = 10;
+export interface DebugRecord {
+  at: number;
+  rev: string;
+  title: string[];
+  score: string[][];
+  judge: string[];
+  result: unknown;
+  ms: number;
+}
+let entries: DebugRecord[] = [];
+const listeners = new Set<() => void>();
+const emit = () => listeners.forEach((l) => l());
+export const subscribeDebug = (l: () => void): (() => void) => {
+  listeners.add(l);
+  return () => listeners.delete(l);
+};
+export const getDebugRecords = (): readonly DebugRecord[] => entries;
+export const clearDebugRecords = (): void => {
+  entries = [];
+  emit();
+};
 
 const texts = (lines: readonly OcrLine[]) => lines.map((l) => `${l.text}(${Math.round(l.confidence)})`).join(" | ");
 
@@ -26,6 +58,11 @@ export function logDebug(...lines: string[]): void {
  * そのターミナルにも送る（スマホで撮った結果を PC の画面で見られる）。本番ビルドでは何もしない。
  */
 export function logOcr(e: OcrDebugEntry): void {
+  if (debugEnabled) {
+    const fmt = (lines: readonly OcrLine[]) => lines.map((l) => `${l.text}(${Math.round(l.confidence)})`);
+    entries = [{ at: Date.now(), rev: OCR_REV, title: fmt(e.title), score: e.score.map(fmt), judge: fmt(e.judge), result: e.result, ms: Math.round(e.ms) }, ...entries].slice(0, MAX_ENTRIES);
+    emit();
+  }
   if (!import.meta.env.DEV) return;
   const lines = [
     `title : ${texts(e.title)}`,

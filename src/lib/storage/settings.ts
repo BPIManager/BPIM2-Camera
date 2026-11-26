@@ -12,6 +12,8 @@ export interface Settings {
   autoCapture: boolean;
   /** 撮影に使うカメラの deviceId。未選択（null）なら背面カメラ */
   cameraId: string | null;
+  /** デバッグモード。オンなら、設定画面の下で OCR の読み取り結果（JSON）を確認できる */
+  debugMode: boolean;
   saveToCameraRoll: boolean;
   /** BPIM2 にスコアを保存する先の既定（最新バージョン / INFINITAS）。結果画面で、1 件ごとに変えられる */
   syncTarget: SyncTarget;
@@ -35,6 +37,7 @@ export function defaultSettings(): Settings {
     layoutAspect: null,
     autoCapture: true,
     cameraId: null,
+    debugMode: false,
     saveToCameraRoll: true,
     syncTarget: DEFAULT_SYNC_TARGET,
     shareImage: "photo",
