@@ -27,9 +27,19 @@ export function rawFromRegions(
   const titleText = japaneseTitle?.trim() || guessTitle(titleTokens);
   // レベルの読み違い（II を 1 と読むなど）に備え、確定しなければレベルを外して照合し直す
   let match = matchChart(master, { ...hints, titleText });
-  if (!match.confident && titleText) {
-    const relaxed = matchChart(master, { ...hints, level: null, notes: null, titleText });
-    if (relaxed.confident) match = relaxed;
+  if (!match.confident) {
+    // 1) ノーツ数が読めていれば、レベルを外して（難易度＋ノーツ数＋曲名）で絞る。2) それも外れたら、レベルとノーツ数を外して曲名で絞る
+    const attempts = [
+      ...(hints.notes !== null ? [{ ...hints, level: null }] : []),
+      ...(titleText ? [{ ...hints, level: null, notes: null }] : []),
+    ];
+    for (const a of attempts) {
+      const relaxed = matchChart(master, { ...a, titleText });
+      if (relaxed.confident) {
+        match = relaxed;
+        break;
+      }
+    }
   }
   // 曲名の弱い一致で範囲を狭めると正しい EX まで除外するので、確定した譜面のノーツ数だけを使う
   const notes = hints.notes ?? (match.confident ? match.candidates[0].entry.notes : null);

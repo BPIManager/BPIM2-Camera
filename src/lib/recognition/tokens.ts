@@ -40,7 +40,7 @@ export function parseChartHints(tokens: readonly OcrToken[]): ChartHints {
 
   // 文字の取り違え（ANOTHER → AWOTHER など）に備え、編集距離が近い単語も難易度とみなす
   if (difficulty === null) {
-    for (const m of text.matchAll(/([A-Z]{5,11})s*([0-9OIl]{1,2})(?![0-9])/g)) {
+    for (const m of text.matchAll(/([A-Z]{5,11})\s*([0-9OIl]{1,2})(?![0-9])/g)) {
       const best = DIFFICULTIES.map((d) => ({ d, dist: editDistance(m[1], d) })).sort((a, b) => a.dist - b.dist)[0];
       if (best.dist <= Math.max(1, Math.floor(best.d.length * 0.2))) {
         difficulty = best.d;
@@ -51,7 +51,19 @@ export function parseChartHints(tokens: readonly OcrToken[]): ChartHints {
     }
   }
 
-  const n = /([0-9OIl]{3,4})\s*NOTES?/.exec(text);
+  // レベルが崩れて読めなくても、難易度の語だけは取る（ANOTHERに など）
+  if (difficulty === null) {
+    for (const m of text.matchAll(/[A-Z]{5,11}/g)) {
+      const best = DIFFICULTIES.map((d) => ({ d, dist: editDistance(m[0], d) })).sort((a, b) => a.dist - b.dist)[0];
+      if (best.dist <= Math.max(1, Math.floor(best.d.length * 0.2))) {
+        difficulty = best.d;
+        break;
+      }
+    }
+  }
+
+  // 「1787 NOTES」。画面の端で切れて NOTES が読めないときは、「SP 1787」の形も使う
+  const n = /([0-9OIl]{3,4})\s*NOTES?/.exec(text) ?? /\b(?:SP|DP)\s*\/?\s*([0-9OIl]{3,4})\b/.exec(text) ?? /\b(?:SP|DP)([0-9OIl]{3,4})\b/.exec(text);
   const notes = n ? Number(toDigits(n[1])) : null;
   return { playStyle: dp ? "DP" : "SP", difficulty, level, notes: notes && notes > 0 ? notes : null };
 }

@@ -32,7 +32,7 @@ export function pickTitleLine(lines: readonly OcrLine[]): string | null {
  * 難易度・レベルで絞った譜面のうち、どの行が最も曲名に似ているかで決める。照合できなければ見た目で選ぶ。
  */
 export function bestTitleLine(lines: readonly OcrLine[], master: readonly SongMasterEntry[]): string | null {
-  const tokens = lines.flatMap((l) => l.text.split(/s+/).filter(Boolean).map((text) => ({ text, confidence: l.confidence })));
+  const tokens = lines.flatMap((l) => l.text.split(/\s+/).filter(Boolean).map((text) => ({ text, confidence: l.confidence })));
   const hints = parseChartHints(tokens);
   let best: { text: string; score: number } | null = null;
   for (const l of lines) {
@@ -64,22 +64,27 @@ export function judgeFromReads(reads: readonly (readonly OcrLine[])[], scores: R
   return undefined;
 }
 
-/** 確度の高い読みを、前処理の種類が 2 つ以上にまたがって一致した値にする */
-const CROSS_CONFIDENCE = 80;
+/**
+ * 前処理の種類が 2 つ以上にまたがって一致した値にする。確度は、どの読みも 80 以上、
+ * または片方が 95 以上でもう片方が 50 以上（元の画像は背景に負けて確度が下がりやすい）。
+ */
 export function crossGroupValues(score: readonly (readonly OcrLine[])[], groups: readonly string[] | undefined): number[] {
   if (!groups) return [];
-  const byGroup = new Map<string, Set<number>>();
+  // 前処理の種類ごとに、値 → 最も高い確度
+  const byGroup = new Map<string, Map<number, number>>();
   score.forEach((lines, i) => {
-    const set = byGroup.get(groups[i]) ?? new Set<number>();
-    for (const l of lines) {
-      if (l.confidence < CROSS_CONFIDENCE) continue;
-      for (const run of digitRuns([l.text])) for (const c of scoreCandidates(run)) set.add(Number(c));
-    }
-    byGroup.set(groups[i], set);
+    const m = byGroup.get(groups[i]) ?? new Map<number, number>();
+    for (const l of lines) for (const run of digitRuns([l.text])) for (const c of scoreCandidates(run)) m.set(Number(c), Math.max(m.get(Number(c)) ?? 0, l.confidence));
+    byGroup.set(groups[i], m);
   });
-  const sets = [...byGroup.values()];
-  if (sets.length < 2) return [];
-  return [...sets[0]].filter((v) => sets.slice(1).every((s) => s.has(v)));
+  const maps = [...byGroup.values()];
+  if (maps.length < 2) return [];
+  return [...maps[0].keys()].filter((v) => {
+    const confs = maps.map((m) => m.get(v));
+    if (confs.some((c) => c === undefined)) return false;
+    const cs = confs as number[];
+    return cs.every((c) => c >= 80) || (Math.max(...cs) >= 95 && cs.every((c) => c >= 50));
+  });
 }
 
 /** PaddleOCR の読みから結果を組み立てる。曲名で曲を特定し、ノーツ数が分かればスコア・判定・差分を合意で解く */

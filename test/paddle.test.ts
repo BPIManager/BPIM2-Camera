@@ -115,3 +115,44 @@ describe("スコア欄の読みが、前処理の違う 2 通りで一致した�
     expect(r?.exScore.value).toBeNull();
   });
 });
+
+describe("実機のログ（モニター越しの撮影）", () => {
+  const m = (songId: number, title: string, level: number, notes: number, difficulty: "ANOTHER" | "HYPER" = "ANOTHER") => ({ songId, title, playStyle: "SP" as const, difficulty, level, notes });
+  const master: SongMasterEntry[] = [
+    m(5235, "TIEFSEE", 12, 1752),
+    m(5573, "ASIAN VIRTUAL REALITIES (MELTING TOGETHER IN DAZZLING DARKNESS)", 12, 1752),
+    m(5721, "BLAZING_LAZER", 12, 1752),
+    m(5605, "二人ノ廃城幽踊宴", 12, 1927),
+    m(7809, "onslaught", 12, 1927),
+  ];
+  it("TIEFSEE: NOTES が切れていても SP1752 からノーツ数を取り、色抜き 3307 と元画像 3307（確度 59）で確定する", () => {
+    const r = rawFromPaddle(
+      {
+        title: [line("TEFSEE", 97), line("SOUNDHOLICVG dJTAKAfOat YURI", 88), line("ANOTHER12", 93), line("SP1752 NOT", 93)],
+        score: [[line("3307", 100), line("一", 72)], [line("330m", 82)], [line("3307", 59), line("M", 59)]],
+        scoreGroups: ["color", "color", "raw"],
+        judge: [[line("1S66", 78), line("4", 99), line("1566", 65), line("3", 65)]],
+      },
+      master,
+    );
+    expect(r?.exScore.value).toBe(3307);
+  });
+  it("二人ノ廃城幽踊宴: レベルが 2 と崩れても、難易度＋ノーツ数＋曲名で特定し、判定表（1552・333）と合意して確定する", () => {
+    const r = rawFromPaddle(
+      {
+        title: [line("二人ノ民城幽踊宴", 72), line("ANOTHER 2 SP 1927", 89), line("上ノ新つかさ", 91)],
+        score: [[], [], [line("3437", 63), line("FHHET", 63), line("+0020", 82)]],
+        scoreGroups: ["color", "color", "raw"],
+        judge: [[line("1552", 92), line("31", 66)], [line("1552", 95), line("333", 73)]],
+      },
+      master,
+    );
+    expect(r?.exScore.value).toBe(3437);
+  });
+  it("難易度の後ろが崩れた ANOTHERに でも、難易度として扱う", async () => {
+    const { parseChartHints } = await import("@/lib/recognition/tokens");
+    const h = parseChartHints([{ text: "ANOTHERに", confidence: 80 }, { text: "SP 1927 NG", confidence: 80 }]);
+    expect(h.difficulty).toBe("ANOTHER");
+    expect(h.notes).toBe(1927);
+  });
+});
