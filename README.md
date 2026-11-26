@@ -13,7 +13,7 @@ IIDX のリザルト画面を撮影（または画像取り込み）して、曲
 
 ```
 pnpm dev
-tailscale serve --bg --https=8443 5173
+tailscale serve --bg --https=8443 5183
 # → https://<端末名>.<tailnet>.ts.net:8443 をスマホ（同じ tailnet）で開く
 tailscale serve --https=8443 off   # 公開を止める
 ```
