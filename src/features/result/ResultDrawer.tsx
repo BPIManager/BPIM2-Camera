@@ -5,6 +5,7 @@ import Button from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import Input from "@/components/ui/input";
 import Label from "@/components/ui/label";
+import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import { saveResult } from "@/lib/storage/history";
 import { saveSample } from "@/lib/storage/samples";
 import { saveImage } from "@/lib/share/save";
@@ -24,12 +25,11 @@ interface Props {
   onClose: () => void;
 }
 
-const SNAP_POINTS = [0.55, 1];
 const API_VERSION = "33";
 
 export default function ResultDrawer({ draft, songs, settings, onClose }: Props) {
   const ed = useResultEditor(draft, API_VERSION);
-  const [snap, setSnap] = useState<number | string | null>(SNAP_POINTS[0]);
+  useKeyboardInset();
   const [editing, setEditing] = useState(ed.chart === null);
   const candidates = (draft.resolution?.candidates ?? []).map((c) => c.entry);
 
@@ -62,9 +62,9 @@ export default function ResultDrawer({ draft, songs, settings, onClose }: Props)
   };
 
   return (
-    <Drawer open onOpenChange={(o) => !o && void closeAndSave()} snapPoints={SNAP_POINTS} activeSnapPoint={snap} setActiveSnapPoint={setSnap}>
-      <DrawerContent className="h-dvh">
-        <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <Drawer open onOpenChange={(o) => !o && void closeAndSave()}>
+      <DrawerContent>
+        <div data-vaul-no-drag className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
           <header className="flex flex-col gap-1">
             <DrawerTitle className="text-lg font-semibold">{ed.chart?.title ?? "曲を選んでください"}</DrawerTitle>
             <DrawerDescription className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -86,7 +86,7 @@ export default function ResultDrawer({ draft, songs, settings, onClose }: Props)
           <div className="flex flex-col gap-2">
             <Label htmlFor="ex">EXスコア</Label>
             {ed.showManualEx ? (
-              <Input id="ex" inputMode="numeric" autoFocus value={ed.exText} onChange={(e) => ed.setExText(e.target.value.replace(/\D/g, ""))} />
+              <Input id="ex" inputMode="numeric" autoFocus onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })} value={ed.exText} onChange={(e) => ed.setExText(e.target.value.replace(/\D/g, ""))} />
             ) : ed.exText !== "" ? (
               <div className="flex items-center justify-between">
                 <p className="text-2xl font-semibold tabular-nums">{ed.exText}</p>
@@ -124,29 +124,28 @@ export default function ResultDrawer({ draft, songs, settings, onClose }: Props)
               )}
             </div>
           )}
-
-          <div className="mt-auto grid grid-cols-3 gap-2">
-            <Button variant="secondary" onClick={() => setEditing((v) => !v)}>
-              <Pencil /> 修正
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!ed.record}
-              onClick={() => ed.record && void saveImage(draft.image, `iidx-${ed.record.createdAt}.jpg`)}
-            >
-              <Download /> 保存
-            </Button>
-            <Button
-              disabled={!ed.record}
-              onClick={async () => {
-                if (!ed.record) return;
-                await commit();
-                await shareResult(buildShareText(ed.record), settings.shareImage === "photo" ? draft.image : null);
-              }}
-            >
-              <Share2 /> シェア
-            </Button>
-          </div>
+        </div>
+        <div className="grid shrink-0 grid-cols-3 gap-2 border-t border-border bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <Button variant="secondary" onClick={() => setEditing((v) => !v)}>
+            <Pencil /> 修正
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={!ed.record}
+            onClick={() => ed.record && void saveImage(draft.image, `iidx-${ed.record.createdAt}.jpg`)}
+          >
+            <Download /> 保存
+          </Button>
+          <Button
+            disabled={!ed.record}
+            onClick={async () => {
+              if (!ed.record) return;
+              await commit();
+              await shareResult(buildShareText(ed.record), settings.shareImage === "photo" ? draft.image : null);
+            }}
+          >
+            <Share2 /> シェア
+          </Button>
         </div>
       </DrawerContent>
     </Drawer>
