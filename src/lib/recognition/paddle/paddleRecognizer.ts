@@ -16,7 +16,7 @@ async function encode(bitmap: ImageBitmap, width: number): Promise<ArrayBuffer> 
   return (await c.convertToBlob({ type: "image/png" })).arrayBuffer();
 }
 
-/** 枠で切り出した 4 か所を PaddleOCR で読み、合意エンジンで EX を決める。全体画像だけのとき（画像取り込み）は代替の認識器に任せる */
+/** 枠で切り出した 3 か所を PaddleOCR で読み、合意エンジンで EX を決める。全体画像だけのとき（画像取り込み）は代替の認識器に任せる */
 export class PaddleRecognizer implements Recognizer {
   constructor(
     private readonly engine: OcrEngine,
@@ -31,7 +31,6 @@ export class PaddleRecognizer implements Recognizer {
     const score: OcrLine[][] = [];
     for (const w of SCORE_WIDTHS) score.push(await this.engine.readLines(await encode(r.score, w)));
     const judge = await this.engine.readLines(await encode(r.judge, SMALL_WIDTH));
-    const rank = await this.engine.readLines(await encode(r.rank, SMALL_WIDTH));
-    return rawFromPaddle({ title, score, judge, rank }, this.getMaster());
+    return rawFromPaddle({ title, score, judge }, this.getMaster());
   }
 }

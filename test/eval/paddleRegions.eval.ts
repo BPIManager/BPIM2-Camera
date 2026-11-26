@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import { describe, it } from "vitest";
-import { digitRuns, parseJudgeRows, parseRankGap, scoreCandidates } from "@/lib/recognition/paddle/parse";
+import { digitRuns, parseJudgeRows, scoreCandidates } from "@/lib/recognition/paddle/parse";
 import { createNodeEngine } from "./paddleNode";
 
 const DIR = process.env.SAMPLE_DIR ?? "D:/camera-example";
@@ -28,7 +28,7 @@ describe("paddle (枠で切り出し)", () => {
     const labels = JSON.parse(readFileSync("internal/labels.local.json", "utf8")) as Label[];
     const engine = await createNodeEngine(MODEL);
     const out: string[] = [];
-    const tally = { score: [0, 0], pg: [0, 0], gr: [0, 0], gap: [0, 0] };
+    const tally = { score: [0, 0], pg: [0, 0], gr: [0, 0] };
     const bump = (k: keyof typeof tally, ok: boolean) => { tally[k][1]++; if (ok) tally[k][0]++; };
     for (const l of labels) {
       const file = path.join(DIR, l.image);
@@ -49,14 +49,6 @@ describe("paddle (枠で切り出し)", () => {
         if (f.pg) bump("pg", String(j.pg) === f.pg.digits);
         if (f.gr) bump("gr", String(j.gr) === f.gr.digits);
         line.push(`judge pg=${f.pg.digits}/${j.pg} gr=${f.gr?.digits}/${j.gr} [${lines.map((x) => x.text).join(" | ")}]`);
-      }
-      if (f?.gap?.boxes && f.gap.size) {
-        const b = union(f.gap.boxes), h = b.y1 - b.y0;
-        const lines = await engine.readLines(await crop(file, f.gap.size, { x0: b.x0 - 6 * h, y0: b.y0 - 5 * h, x1: b.x1 + h, y1: b.y1 + 1.5 * h }));
-        const g = parseRankGap(lines.map((x) => x.text));
-        const ok = g?.gap === Number(f.gap.digits);
-        bump("gap", ok);
-        line.push(`gap ${f.gap.rank}${f.gap.sign}${f.gap.digits} ${ok ? "○" : "×"} → ${JSON.stringify(g ?? null)} [${lines.map((x) => x.text).join(" | ")}]`);
       }
       out.push(line.join("\n  "));
     }

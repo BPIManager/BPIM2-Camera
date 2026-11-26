@@ -48,7 +48,6 @@ export default function ResultDrawer({ draft, songs, settings, onClose }: Props)
         correctedFields: ed.record.correctedFields,
         scoreCrop: draft.regions.score,
         titleCrop: draft.regions.title,
-        rankCrop: draft.regions.rank,
         judgeCrop: draft.regions.judge,
       });
     }
@@ -86,27 +85,13 @@ export default function ResultDrawer({ draft, songs, settings, onClose }: Props)
           <div className="flex flex-col gap-2">
             <Label htmlFor="ex">EXスコア</Label>
             {ed.showManualEx ? (
-              <Input id="ex" inputMode="numeric" autoFocus onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })} value={ed.exText} onChange={(e) => ed.setExText(e.target.value.replace(/\D/g, ""))} />
-            ) : ed.exText !== "" ? (
+              <Input id="ex" inputMode="numeric" autoFocus={ed.chart !== null} onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })} value={ed.exText} onChange={(e) => ed.setExText(e.target.value.replace(/\D/g, ""))} />
+            ) : (
               <div className="flex items-center justify-between">
                 <p className="text-2xl font-semibold tabular-nums">{ed.exText}</p>
                 <Button variant="ghost" size="sm" onClick={ed.startManualEx}>
                   修正
                 </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <p className="text-sm text-muted-foreground">読み取った中から選んでください</p>
-                <div className="flex flex-wrap gap-2">
-                  {ed.exCandidates.map((n) => (
-                    <Button key={n} variant="secondary" className="tabular-nums" onClick={() => ed.setExText(String(n))}>
-                      {n}
-                    </Button>
-                  ))}
-                  <Button variant="ghost" onClick={ed.startManualEx}>
-                    どれでもない
-                  </Button>
-                </div>
               </div>
             )}
             {ed.chart && ed.exText !== "" && !ed.valid && (

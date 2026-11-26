@@ -43,12 +43,7 @@ describe("paddle E2E", () => {
         const p = union(f.pg.boxes), g = f.gr?.boxes ? union(f.gr.boxes) : p, ph = p.y1 - p.y0;
         judge = await crop({ x0: p.x0 - 8 * ph, y0: p.y0 - 0.6 * ph, x1: p.x1 + ph, y1: g.y1 + 4.5 * ph }, 700);
       }
-      let rank: OcrLine[] | undefined;
-      if (f?.gap?.boxes) {
-        const g = union(f.gap.boxes), gh = g.y1 - g.y0;
-        rank = await crop({ x0: g.x0 - 6 * gh, y0: g.y0 - 5 * gh, x1: g.x1 + gh, y1: g.y1 + 1.5 * gh }, 700);
-      }
-      const raw = rawFromPaddle({ title, score, judge, rank }, master);
+      const raw = rawFromPaddle({ title, score, judge }, master);
       t.n++;
       const v = raw?.exScore.value ?? null;
       const status = v === null ? "未確定" : String(v) === l.digits ? "確定○" : "確定×";

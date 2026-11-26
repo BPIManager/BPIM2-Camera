@@ -16,8 +16,7 @@ export interface TrainingSample {
   correctedFields: string[];
   scoreCrop: Blob;
   titleCrop: Blob;
-  /** DJ LEVEL 行・判定表の切り出し（ランク差分・PG/GR の学習に使う）。古いサンプルにはない */
-  rankCrop?: Blob;
+  /** 判定表の切り出し（PG/GR の学習に使う）。古いサンプルにはない */
   judgeCrop?: Blob;
 }
 

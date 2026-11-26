@@ -4,7 +4,7 @@ import { matchChart } from "@/lib/songs/matcher";
 import { rawFromRegions } from "../fromRegions";
 import { parseChartHints, type OcrToken } from "../tokens";
 import type { OcrLine } from "./engine";
-import { digitRuns, parseJudgeRows, parseRankGap, scoreCandidates } from "./parse";
+import { digitRuns, parseJudgeRows, scoreCandidates } from "./parse";
 
 export interface PaddleReadings {
   /** 曲名・譜面の枠の行 */
@@ -12,7 +12,6 @@ export interface PaddleReadings {
   /** スコア欄の読み。前処理ごとに 1 件 */
   score: readonly (readonly OcrLine[])[];
   judge?: readonly OcrLine[];
-  rank?: readonly OcrLine[];
 }
 
 const META = /NOTES?|ANOTHER|HYPER|NORMAL|LEGGENDARIA|BEGINNER|^\s*(SP|DP)\b/i;
@@ -46,8 +45,6 @@ export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntr
   const titleTokens: OcrToken[] = r.title.flatMap((l) => l.text.split(/\s+/).filter(Boolean).map((text) => ({ text, confidence: l.confidence })));
   const scoreReadings = r.score.map((lines) => digitRuns(lines.map((l) => l.text)).flatMap(scoreCandidates));
   const judge = r.judge ? parseJudgeRows(r.judge) : undefined;
-  const rankGap = r.rank ? parseRankGap(r.rank.map((l) => l.text)) : undefined;
-  const hasExtras = (judge && (judge.pg !== undefined || judge.gr !== undefined)) || rankGap;
-  const extras = hasExtras ? { ...(judge ? { judge } : {}), ...(rankGap ? { rankGap } : {}) } : undefined;
+  const extras = judge && (judge.pg !== undefined || judge.gr !== undefined) ? { judge } : undefined;
   return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true);
 }

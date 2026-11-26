@@ -3,7 +3,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { describe, it } from "vitest";
 import { pickTitleLine } from "@/lib/recognition/paddle/fromPaddle";
-import { digitRuns, parseJudgeLines, parseRankGap } from "@/lib/recognition/paddle/parse";
+import { digitRuns, parseJudgeLines } from "@/lib/recognition/paddle/parse";
 import { parseChartHints } from "@/lib/recognition/tokens";
 import { matchChart } from "@/lib/songs/matcher";
 import type { SongMasterEntry } from "@/lib/songs/types";
@@ -41,7 +41,7 @@ describe("paddle (全体画像)", () => {
       if (want) { scoreTotal++; if (runs.has(want)) { scoreHit++; hit = "○"; } else hit = "×"; }
       n++;
       if (m.confident) titleConfident++;
-      out.push(`${f}\n  score ${want ?? "?"} ${hit}   judge=${JSON.stringify(parseJudgeLines(texts))} gap=${JSON.stringify(parseRankGap(texts) ?? null)}\n  title="${title}" → ${m.candidates[0]?.entry.title ?? "-"} (${m.candidates[0]?.entry.difficulty ?? ""}${m.candidates[0]?.entry.level ?? ""}) confident=${m.confident}\n  lines: ${texts.join(" | ")}`);
+      out.push(`${f}\n  score ${want ?? "?"} ${hit}   judge=${JSON.stringify(parseJudgeLines(texts))}\n  title="${title}" → ${m.candidates[0]?.entry.title ?? "-"} (${m.candidates[0]?.entry.difficulty ?? ""}${m.candidates[0]?.entry.level ?? ""}) confident=${m.confident}\n  lines: ${texts.join(" | ")}`);
     }
     await engine.destroy();
     out.push(`\n[${MODEL}] スコアが行内にそのまま現れた ${scoreHit}/${scoreTotal}、曲を確信して特定 ${titleConfident}/${n}`);

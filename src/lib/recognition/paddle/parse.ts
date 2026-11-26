@@ -1,5 +1,4 @@
 import type { OcrLine } from "./engine";
-import type { Rank } from "../consensus/ranks";
 import type { Observations } from "../consensus/engine";
 import { toDigits } from "../tokens";
 
@@ -37,22 +36,6 @@ export function parseJudgeLines(lines: readonly string[]): Judge {
     else out.gr = greatRows[0].n;
   }
   return out;
-}
-
-const RANK_PATTERN = /(MAX|AAA|AA|A|B|C|D|E)\s*([+＋t十\-－−ー~])?\s*([0-9OoIl|]{4})\b/;
-
-/** DJ LEVEL 行の差分（`AAA +0104`・`MAX -0007`）。数字は 4 桁そろった表示だけを採る */
-export function parseRankGap(lines: readonly string[]): Observations["rankGap"] | undefined {
-  for (const raw of lines) {
-    const m = RANK_PATTERN.exec(raw.toUpperCase().replace(/\s+/g, " "));
-    if (!m) continue;
-    const gap = Number(toDigits(m[3]));
-    if (!Number.isInteger(gap)) continue;
-    const s = m[2];
-    const sign = s === undefined ? null : /[+＋T十]/.test(s) ? "+" : "-";
-    return { rank: m[1] as Rank, sign, gap };
-  }
-  return undefined;
 }
 
 /** 数字の行から、1〜4 桁の数字の塊を取り出す（スコア欄の読み） */

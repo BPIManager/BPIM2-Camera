@@ -72,7 +72,7 @@ describe("settings の枠（4 枠化後）", () => {
   });
 
   it("壊れた枠だけを捨て、有効な枠は残す", () => {
-    const s = loadSettings(mem({ guides: { "1P": { score: ok, rank: { x: 2, y: 0, width: 1, height: 1 } } } }));
+    const s = loadSettings(mem({ guides: { "1P": { score: ok, judge: { x: 2, y: 0, width: 1, height: 1 } } } }));
     expect(s.guides["1P"]).toEqual({ score: ok });
   });
 });

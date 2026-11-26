@@ -50,7 +50,7 @@ describe("isValidRect", () => {
 
 describe("resolveLayout", () => {
   const rect = (x: number) => ({ x, y: 0.1, width: 0.2, height: 0.1 });
-  const full = { score: rect(0.1), title: rect(0.5), rank: rect(0.3), judge: rect(0.2) };
+  const full = { score: rect(0.1), title: rect(0.5), judge: rect(0.2) };
 
   it("調整済みならそれを使い、なければ既定値", () => {
     expect(resolveLayout("1P", { "1P": full })).toEqual(full);
@@ -65,11 +65,10 @@ describe("resolveLayout", () => {
     const old = { score: rect(0.1), title: rect(0.5) };
     const r = resolveLayout("1P", { "1P": old });
     expect(r.score).toEqual(old.score);
-    expect(r.rank).toEqual(GUIDE_LAYOUTS["1P"].rank);
     expect(r.judge).toEqual(GUIDE_LAYOUTS["1P"].judge);
   });
 
-  it("既定の 4 枠は表示領域に収まり、1P と 2P で左右対称", () => {
+  it("既定の 3 枠は表示領域に収まり、1P と 2P で左右対称", () => {
     for (const side of ["1P", "2P"] as const) {
       for (const k of GUIDE_KEYS) {
         const r = GUIDE_LAYOUTS[side][k];
@@ -79,6 +78,6 @@ describe("resolveLayout", () => {
         expect(r.y + r.height).toBeLessThanOrEqual(1.0001);
       }
     }
-    expect(GUIDE_LAYOUTS["2P"].rank.x).toBeCloseTo(1 - GUIDE_LAYOUTS["1P"].rank.x - GUIDE_LAYOUTS["1P"].rank.width);
+    expect(GUIDE_LAYOUTS["2P"].judge.x).toBeCloseTo(1 - GUIDE_LAYOUTS["1P"].judge.x - GUIDE_LAYOUTS["1P"].judge.width);
   });
 });

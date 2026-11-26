@@ -71,7 +71,6 @@ export default function App() {
         ? ({
             score: await createImageBitmap(regions.score),
             title: await createImageBitmap(regions.title),
-            rank: await createImageBitmap(regions.rank),
             judge: await createImageBitmap(regions.judge),
           } satisfies Record<GuideKey, ImageBitmap>)
         : undefined;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { pickTitleLine, rawFromPaddle } from "@/lib/recognition/paddle/fromPaddle";
 import type { OcrLine } from "@/lib/recognition/paddle/engine";
-import { parseJudgeRows, parseJudgeLines, parseRankGap, scoreCandidates } from "@/lib/recognition/paddle/parse";
+import { parseJudgeRows, parseJudgeLines, scoreCandidates } from "@/lib/recognition/paddle/parse";
 import type { SongMasterEntry } from "@/lib/songs/types";
 
 const line = (text: string, confidence = 90, y = 0, x = 0): OcrLine => ({ text, confidence, box: { x, y, width: 10, height: 10 } });
@@ -19,19 +19,6 @@ describe("parseJudgeLines", () => {
   });
   it("O や I を数字に寄せる", () => {
     expect(parseJudgeLines(["GREAT 1O5I"])).toMatchObject({ gr: 1051 });
-  });
-});
-
-describe("parseRankGap", () => {
-  it("ランク・符号・差分を取る", () => {
-    expect(parseRankGap(["AAA +0104"])).toEqual({ rank: "AAA", sign: "+", gap: 104 });
-    expect(parseRankGap(["MAX -0007"])).toEqual({ rank: "MAX", sign: "-", gap: 7 });
-  });
-  it("符号が読めなければ null", () => {
-    expect(parseRankGap(["AA 0120"])).toEqual({ rank: "AA", sign: null, gap: 120 });
-  });
-  it("4 桁そろわない数字は採らない", () => {
-    expect(parseRankGap(["AAA +104"])).toBeUndefined();
   });
 });
 

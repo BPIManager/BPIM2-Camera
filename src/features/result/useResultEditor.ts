@@ -12,9 +12,8 @@ export function useResultEditor(draft: Draft, version: string) {
   const [exText, setExText] = useState(draft.resolution?.exScore?.toString() ?? "");
   const [bpi, setBpi] = useState<BpiOutcome | null>(null);
   const [manualEx, setManualEx] = useState(false);
-  const exCandidates = draft.resolution?.exCandidates ?? draft.raw?.exCandidates ?? [];
-  /** 自動・候補のどちらでも EX に到達できないときだけ手入力欄を出す */
-  const showManualEx = manualEx || (exText === "" && exCandidates.length === 0);
+  /** 自動で 1 つに決まらなかったときは、候補は出さずに手入力にする */
+  const showManualEx = manualEx || exText === "";
 
   const exScore = exText === "" ? null : Number(exText);
   const valid = chart !== null && exScore !== null && isExScoreInRange(exScore, chart.notes);
@@ -72,7 +71,6 @@ export function useResultEditor(draft: Draft, version: string) {
     pickSong: (e: SongMasterEntry) => setChart(toChartRef(e)),
     exText,
     setExText,
-    exCandidates,
     showManualEx,
     startManualEx: () => {
       setExText("");
