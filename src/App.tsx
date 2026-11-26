@@ -45,7 +45,7 @@ export default function App() {
       <Onboarding
         ios={isIos}
         standalone={isStandalone}
-        onDone={(consent) => update({ onboarded: true, statsConsent: consent })}
+        onDone={({ statsConsent, playSide }) => update({ onboarded: true, statsConsent, playSide })}
       />
     );
   }
