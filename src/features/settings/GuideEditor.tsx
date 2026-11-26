@@ -3,7 +3,7 @@ import { ImagePlus, RotateCcw } from "lucide-react";
 import Button from "@/components/ui/button";
 import type { Size } from "@/lib/vision/framing";
 import { moveRect, resizeRect, type Corner } from "@/lib/vision/guideEdit";
-import { GUIDE_LAYOUTS, type GuideKey, type GuideLayout } from "@/lib/vision/guides";
+import { GUIDE_KEYS, GUIDE_LABELS, GUIDE_LAYOUTS, type GuideKey, type GuideLayout } from "@/lib/vision/guides";
 import type { PlaySide } from "@/lib/storage/settings";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +16,6 @@ interface Props {
   onClose: () => void;
 }
 
-const LABELS: Record<GuideKey, string> = { score: "スコア", title: "曲名・譜面" };
 const CORNERS: { corner: Corner; pos: string }[] = [
   { corner: "nw", pos: "-left-3 -top-3" },
   { corner: "ne", pos: "-right-3 -top-3" },
@@ -102,7 +101,7 @@ export default function GuideEditor({ side, initial, viewSize, onSave, onClose }
               「画像」から、リザルト画面の写真を選ぶと、背景に表示されます
             </p>
           )}
-          {(Object.keys(LABELS) as GuideKey[]).map((key) => {
+          {GUIDE_KEYS.map((key) => {
             const r = layout[key];
             const on = selected === key;
             return (
@@ -112,7 +111,7 @@ export default function GuideEditor({ side, initial, viewSize, onSave, onClose }
                 className={cn("absolute cursor-move touch-none rounded-sm border-2", on ? "border-primary" : "border-guide")}
                 style={{ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.width * 100}%`, height: `${r.height * 100}%` }}
               >
-                <span className="absolute -top-6 left-0 text-xs font-medium">{LABELS[key]}</span>
+                <span className="absolute -top-6 left-0 text-xs font-medium">{GUIDE_LABELS[key]}</span>
                 {on &&
                   CORNERS.map(({ corner, pos }) => (
                     <span
