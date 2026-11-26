@@ -26,6 +26,8 @@ export function rawFromRegions(
   crossValues: readonly number[] = [],
   /** 判定表の枠で読めた数字すべて。PG・GR の組み合わせから EX を作り、スコア欄の読みと 1 桁違い以内なら裏付けにする */
   judgePool: readonly JudgeRead[] = [],
+  /** 確度の高い読みが、2 回以上そろった値（前処理の種類は問わない）。PG と矛盾しないときだけ採る */
+  strongValues: readonly number[] = [],
 ): RawResult | null {
   const hints = parseChartHints(titleTokens);
   const titleText = japaneseTitle?.trim() || guessTitle(titleTokens);
@@ -54,7 +56,16 @@ export function rawFromRegions(
       ? decideExScore({ notes, score: [...new Set(scoreReadings.flatMap((r) => r.map(Number).filter((n) => Number.isInteger(n))))], ...extras })
       : null;
   const scoreNumbers = [...new Set(scoreReadings.flatMap((rd) => rd.map(Number).filter((n) => Number.isInteger(n))))];
-  const fallback = notes === null ? [] : [...new Set([...crossValues.filter((v) => v >= 100 && v <= notes * 2), ...approximatePairs(judgePool, notes, scoreNumbers)])];
+  const fallback =
+    notes === null
+      ? []
+      : [
+          ...new Set([
+            ...crossValues.filter((v) => v >= 100 && v <= notes * 2),
+            ...strongValues.filter((v) => v >= 100 && v <= notes * 2 && consistentWithPg(v, notes, judgePool)),
+            ...approximatePairs(judgePool, notes, scoreNumbers),
+          ]),
+        ];
   const exValue = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? (fallback.length === 1 ? fallback[0] : null) : vote.value;
   const exCandidates = exValue !== null ? [] : [...new Set([...(consensus?.ranked.map((c) => c.value) ?? []), ...vote.candidates])].slice(0, 3);
   if (hints.difficulty === null && hints.notes === null && titleText === null && vote.candidates.length === 0) return null;
@@ -106,4 +117,16 @@ export function approximatePairs(pool: readonly JudgeRead[], notes: number, scor
     }
   }
   return [...out];
+}
+
+/**
+ * EX が、読めた PG と矛盾しないか。PG（確度 80 以上で最大の数字）から GR を逆算し、PG＋GR がノーツ数の 90〜100% に収まるか見る。
+ * PG が読めていなければ、確かめようがないので矛盾なしとする。
+ */
+export function consistentWithPg(ex: number, notes: number, pool: readonly JudgeRead[]): boolean {
+  const pg = pool.filter((r) => r.conf >= 80 && r.n >= 100).sort((a, b) => b.n - a.n)[0];
+  if (!pg) return true;
+  const gr = ex - pg.n * 2;
+  const sum = pg.n + gr;
+  return gr >= 0 && sum <= notes && sum >= notes * 0.9;
 }

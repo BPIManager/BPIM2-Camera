@@ -198,3 +198,28 @@ describe("曲の決定（resolveResult まで通す）", () => {
     expect(res.issues).not.toContain("song-not-found");
   });
 });
+
+describe("確度の高い読みが 2 回そろったとき", () => {
+  const master: SongMasterEntry[] = [{ songId: 5703, title: "The Clown of 24stairs", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1788 }];
+  const title = [line("The clownof24stars", 91), line("Yu Asahina", 72), line("S 7 8 NO", 72), line("ANOTHER12", 82)];
+  it("実機のログ: 色抜き 3210(98)・緩い条件 3210(92)・元画像 3219(56) は、3210 に確定する", () => {
+    const r = rawFromPaddle(
+      {
+        title,
+        score: [[line("3210", 98)], [line("3210", 92), line("OE", 62)], [line("5", 56), line("3219", 56), line("0000", 56)]],
+        scoreGroups: ["color", "color", "raw"],
+        judge: [[line("e", 84), line("2", 84), line("1476", 81), line("25e", 56)]],
+      },
+      master,
+    );
+    expect(r?.exScore.value).toBe(3210);
+  });
+  it("確度の高い別の値が競合しているときは確定しない", () => {
+    const r = rawFromPaddle({ title, score: [[line("3210", 98)], [line("3210", 92)], [line("3219", 85)]], scoreGroups: ["color", "color", "raw"], judge: [[]] }, master);
+    expect(r?.exScore.value).toBeNull();
+  });
+  it("読めた PG と矛盾する値（逆算した GR がノーツ数に合わない）は確定しない", () => {
+    const r = rawFromPaddle({ title, score: [[line("3210", 98)], [line("3210", 92)]], scoreGroups: ["color", "color"], judge: [[line("1200", 90)]] }, master);
+    expect(r?.exScore.value).toBeNull();
+  });
+});

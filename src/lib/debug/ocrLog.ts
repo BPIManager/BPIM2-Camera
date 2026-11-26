@@ -1,7 +1,7 @@
 import type { OcrLine } from "@/lib/recognition/paddle/engine";
 
 /** 認識ロジックの版。コードを変えたら更新する（スマホが古いコードのままかを、ログで見分けるため） */
-export const OCR_REV = "r12 曲の決定に特定した譜面を反映";
+export const OCR_REV = "r13 確度の高い読みが 2 回そろえば確定";
 
 export interface OcrDebugEntry {
   title: readonly OcrLine[];
