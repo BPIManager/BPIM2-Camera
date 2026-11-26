@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Badge from "@/components/ui/badge";
+import Button from "@/components/ui/button";
 import Input from "@/components/ui/input";
 import { searchSongs } from "@/lib/songs/matcher";
 import type { SongMasterEntry } from "@/lib/songs/types";
@@ -14,11 +15,17 @@ const DIFF = { BEGINNER: "B", NORMAL: "N", HYPER: "H", ANOTHER: "A", LEGGENDARIA
 
 export default function SongPicker({ songs, candidates, onPick }: Props) {
   const [q, setQ] = useState("");
-  const list = q.trim() ? searchSongs(songs, q) : [...candidates];
+  /** 自動で絞れた候補があるうちは検索欄を出さない。候補にない曲のときだけ開く */
+  const [searching, setSearching] = useState(candidates.length === 0);
+  const list = searching && q.trim() ? searchSongs(songs, q) : [...candidates];
 
   return (
     <div className="flex flex-col gap-2">
-      <Input placeholder="曲名で検索" value={q} onChange={(e) => setQ(e.target.value)} aria-label="曲名で検索" />
+      {searching ? (
+        <Input placeholder="曲名で検索" autoFocus value={q} onChange={(e) => setQ(e.target.value)} aria-label="曲名で検索" />
+      ) : (
+        <p className="text-sm text-muted-foreground">近い曲から選んでください</p>
+      )}
       <ul className="flex max-h-48 flex-col overflow-y-auto">
         {list.map((s) => (
           <li key={s.songId}>
@@ -36,6 +43,11 @@ export default function SongPicker({ songs, candidates, onPick }: Props) {
           </li>
         ))}
       </ul>
+      {!searching && (
+        <Button variant="ghost" size="sm" className="self-start" onClick={() => setSearching(true)}>
+          候補にない曲を検索
+        </Button>
+      )}
     </div>
   );
 }

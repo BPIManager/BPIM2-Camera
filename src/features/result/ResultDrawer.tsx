@@ -68,7 +68,30 @@ export default function ResultDrawer({ draft, songs, settings, onClose }: Props)
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="ex">EXスコア</Label>
-            <Input id="ex" inputMode="numeric" value={ed.exText} onChange={(e) => ed.setExText(e.target.value.replace(/\D/g, ""))} />
+            {ed.showManualEx ? (
+              <Input id="ex" inputMode="numeric" autoFocus value={ed.exText} onChange={(e) => ed.setExText(e.target.value.replace(/\D/g, ""))} />
+            ) : ed.exText !== "" ? (
+              <div className="flex items-center justify-between">
+                <p className="text-2xl font-semibold tabular-nums">{ed.exText}</p>
+                <Button variant="ghost" size="sm" onClick={ed.startManualEx}>
+                  修正
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-muted-foreground">読み取った中から選んでください</p>
+                <div className="flex flex-wrap gap-2">
+                  {ed.exCandidates.map((n) => (
+                    <Button key={n} variant="secondary" className="tabular-nums" onClick={() => ed.setExText(String(n))}>
+                      {n}
+                    </Button>
+                  ))}
+                  <Button variant="ghost" onClick={ed.startManualEx}>
+                    どれでもない
+                  </Button>
+                </div>
+              </div>
+            )}
             {ed.chart && ed.exText !== "" && !ed.valid && (
               <p className="text-sm text-destructive">0〜{ed.chart.notes * 2} の範囲で入力してください</p>
             )}

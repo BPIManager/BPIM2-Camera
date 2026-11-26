@@ -15,6 +15,8 @@ export interface Resolution {
   chart: ChartRef | null;
   candidates: MatchCandidate[];
   exScore: number | null;
+  /** EX 未確定のときの候補（確度順）。1 タップ選択に使い、手入力はその後 */
+  exCandidates: number[];
   issues: ResolveIssue[];
   /** 確認操作なしで確定してよい（検算一致＋曲が一意） */
   autoConfirm: boolean;
@@ -61,6 +63,7 @@ export function resolveResult(
     chart: outcome.confident && top ? toChartRef(top) : null,
     candidates: outcome.candidates,
     exScore: ex,
+    exCandidates: raw.exCandidates ?? [],
     issues,
     autoConfirm: issues.length === 0,
   };
