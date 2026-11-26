@@ -7,7 +7,7 @@ export interface Glyph {
   vector: number[];
 }
 
-export const GLYPH_W = 12;
+export const GLYPH_W = 28;
 export const GLYPH_H = 18;
 
 /** 水色（今回スコアの数字）の画素か。HSV で見て照明の違いに強くする */
@@ -104,24 +104,80 @@ export function components(mask: Uint8Array, w: number, h: number): Box[] {
   return boxes;
 }
 
-/** 外接矩形内の画素を GLYPH_W × GLYPH_H に面積平均で縮小し、濃度ベクトルにする */
+/**
+ * 外接矩形内の画素を、縦横比を保ったまま高さ GLYPH_H に合わせて縮小し、GLYPH_W × GLYPH_H の濃度ベクトルにする。
+ * 幅は伸ばさず中央に置く（細い「1」が太い数字に似ないようにするため）。矩形の外の画素は数えない。
+ */
 export function normalizeGlyph(mask: Uint8Array, w: number, b: Pick<Box, "x0" | "y0" | "x1" | "y1">): number[] {
   const bw = b.x1 - b.x0 + 1;
   const bh = b.y1 - b.y0 + 1;
+  const scale = bh / GLYPH_H;
+  // 幅が収まらないほど横長のときは、横に収まる縮尺にする
+  const s = Math.max(scale, bw / GLYPH_W);
+  const left = b.x0 + bw / 2 - (GLYPH_W * s) / 2;
+  const top = b.y0 + bh / 2 - (GLYPH_H * s) / 2;
   const v: number[] = [];
   for (let gy = 0; gy < GLYPH_H; gy++) {
     for (let gx = 0; gx < GLYPH_W; gx++) {
-      const sx0 = b.x0 + Math.floor((gx * bw) / GLYPH_W);
-      const sx1 = b.x0 + Math.max(Math.floor(((gx + 1) * bw) / GLYPH_W), Math.floor((gx * bw) / GLYPH_W) + 1);
-      const sy0 = b.y0 + Math.floor((gy * bh) / GLYPH_H);
-      const sy1 = b.y0 + Math.max(Math.floor(((gy + 1) * bh) / GLYPH_H), Math.floor((gy * bh) / GLYPH_H) + 1);
+      const sx0 = left + gx * s;
+      const sy0 = top + gy * s;
+      const x0 = Math.floor(sx0);
+      const x1 = Math.max(x0 + 1, Math.ceil(sx0 + s));
+      const y0 = Math.floor(sy0);
+      const y1 = Math.max(y0 + 1, Math.ceil(sy0 + s));
       let on = 0;
       let n = 0;
-      for (let y = sy0; y < sy1; y++) for (let x = sx0; x < sx1; x++) (on += mask[y * w + x]), n++;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          n++;
+          if (x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) on += mask[y * w + x];
+        }
+      }
       v.push(n ? on / n : 0);
     }
   }
   return v;
+}
+
+/** 隣り合い、高さが揃い、少しずつ上下にずれてもよい成分の連鎖のうち最長のものを返す */
+export function longestChain(boxes: Box[]): Box[] {
+  return chainGlyphs(boxes)[0] ?? [];
+}
+
+/**
+ * x 順の成分から連鎖（数字列の候補）を作る。終端ごとに最長の連鎖を 1 本ずつ返し、長い順に並べる。
+ * 撮影の傾きで行が斜めでも追える。
+ */
+export function chainGlyphs(boxes: Box[]): Box[][] {
+  if (boxes.length === 0) return [];
+  const sorted = [...boxes].sort((p, q) => p.x0 - q.x0);
+  const cy = (b: Box) => (b.y0 + b.y1) / 2;
+  const ht = (b: Box) => b.y1 - b.y0 + 1;
+  const next = (p: Box, q: Box) =>
+    q.x0 > p.x0 &&
+    q.x0 - p.x1 <= ht(p) &&
+    Math.abs(cy(q) - cy(p)) <= ht(p) * 0.5 &&
+    ht(q) >= ht(p) * 0.7 &&
+    ht(q) <= ht(p) * 1.4;
+  const len = sorted.map(() => 1);
+  const from = sorted.map(() => -1);
+  for (let j = 0; j < sorted.length; j++) {
+    for (let i = 0; i < j; i++) {
+      if (next(sorted[i], sorted[j]) && len[i] + 1 > len[j]) {
+        len[j] = len[i] + 1;
+        from[j] = i;
+      }
+    }
+  }
+  const chains = sorted.map((_, end) => {
+    const c: Box[] = [];
+    for (let k = end; k >= 0; k = from[k]) c.unshift(sorted[k]);
+    return c;
+  });
+  // 他の連鎖に完全に含まれるものは除く
+  return chains
+    .filter((c, i) => !chains.some((o, j) => j !== i && o.length > c.length && c.every((b) => o.includes(b))))
+    .sort((p, q) => q.length - p.length || q.reduce((a, b) => a + b.area, 0) - p.reduce((a, b) => a + b.area, 0));
 }
 
 /** 数字 1 文字の標準的な縦横比（幅 / 高さ）。斜体と撮影の傾きで横長になる */
@@ -190,30 +246,7 @@ export function segmentGlyphs(mask: Uint8Array, w: number, h: number): Glyph[] {
     .sort((a, b) => a.x0 - b.x0);
   if (boxes.length === 0) return [];
 
-  const cy = (b: Box) => (b.y0 + b.y1) / 2;
-  const ht = (b: Box) => b.y1 - b.y0 + 1;
-  const next = (a: Box, b: Box) =>
-    b.x0 > a.x0 &&
-    b.x0 - a.x1 <= ht(a) &&
-    Math.abs(cy(b) - cy(a)) <= ht(a) * 0.5 &&
-    ht(b) >= ht(a) * 0.7 &&
-    ht(b) <= ht(a) * 1.4;
-
-  // x 順に並べた成分上で、最も長い連鎖を動的計画法で求める
-  const len = boxes.map(() => 1);
-  const from = boxes.map(() => -1);
-  for (let j = 0; j < boxes.length; j++) {
-    for (let i = 0; i < j; i++) {
-      if (next(boxes[i], boxes[j]) && len[i] + 1 > len[j]) {
-        len[j] = len[i] + 1;
-        from[j] = i;
-      }
-    }
-  }
-  let end = 0;
-  for (let j = 1; j < boxes.length; j++) if (len[j] > len[end] || (len[j] === len[end] && boxes[j].area > boxes[end].area)) end = j;
-  const chain: Box[] = [];
-  for (let k = end; k >= 0; k = from[k]) chain.unshift(boxes[k]);
+  const chain = longestChain(boxes);
 
   return chain.map((b) => ({
     x: b.x0,
