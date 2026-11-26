@@ -1,6 +1,8 @@
 import Button from "@/components/ui/button";
 import Label from "@/components/ui/label";
+import { RadioGroup, RadioItem } from "@/components/ui/radio-group";
 import Switch from "@/components/ui/switch";
+import type { PlaySide } from "@/lib/storage/settings";
 import { clearHistory } from "@/lib/storage/history";
 import type { Settings } from "@/lib/storage/settings";
 
@@ -24,6 +26,14 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint?: 
 export default function SettingsView({ settings, update }: Props) {
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 pb-8">
+      <div className="flex flex-col gap-2 border-b border-border py-3">
+        <Label>プレーする側</Label>
+        <p className="text-xs text-muted-foreground">リザルト画面は 1P と 2P で左右が反転します</p>
+        <RadioGroup value={settings.playSide} onValueChange={(v) => update({ playSide: v as PlaySide })} aria-label="プレーする側">
+          <RadioItem value="1P">1P</RadioItem>
+          <RadioItem value="2P">2P</RadioItem>
+        </RadioGroup>
+      </div>
       <Row id="auto" label="自動撮影" hint="静止して画面が読めたら自動で読み取ります">
         <Switch id="auto" checked={settings.autoCapture} onCheckedChange={(v) => update({ autoCapture: v })} />
       </Row>
