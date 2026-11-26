@@ -137,3 +137,29 @@ describe("readScoreByGlyphs", () => {
     expect(readScoreByGlyphs(paint("12345"), model)).toBeNull();
   });
 });
+
+describe("splitInto", () => {
+  it("接触した 2 文字を、桁数を指定して谷で切り分ける", async () => {
+    const { splitInto, components } = await import("@/lib/recognition/glyphs/segment");
+    // 幅 10 の縦棒 2 本を細い橋（1 行）でつないだ形
+    const w = 40;
+    const h = 20;
+    const mask = new Uint8Array(w * h);
+    for (let y = 2; y < 18; y++) for (let x = 5; x < 15; x++) mask[y * w + x] = 1;
+    for (let y = 2; y < 18; y++) for (let x = 20; x < 30; x++) mask[y * w + x] = 1;
+    for (let x = 15; x < 20; x++) mask[10 * w + x] = 1;
+    const [whole] = components(mask, w, h);
+    expect(components(mask, w, h)).toHaveLength(1);
+    const parts = splitInto(mask, w, whole, 2);
+    expect(parts).toHaveLength(2);
+    expect(parts[0].x1).toBeLessThan(parts[1].x0);
+    expect(parts[0].x0).toBe(5);
+    expect(parts[1].x1).toBe(29);
+  });
+
+  it("n が 1 なら分割しない", async () => {
+    const { splitInto } = await import("@/lib/recognition/glyphs/segment");
+    const box = { x0: 0, y0: 0, x1: 9, y1: 9, area: 50 };
+    expect(splitInto(new Uint8Array(100), 10, box, 1)).toEqual([box]);
+  });
+});

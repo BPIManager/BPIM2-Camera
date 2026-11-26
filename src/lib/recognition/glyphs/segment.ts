@@ -193,6 +193,16 @@ export function splitWide(mask: Uint8Array, w: number, box: Box): Box[] {
   const n = Math.round(bw / bh / GLYPH_ASPECT);
   if (bw / bh < GLYPH_ASPECT * 1.9 || n < 2) return [box];
 
+  return splitInto(mask, w, box, n);
+}
+
+/**
+ * 外接矩形を n 個の文字に分ける。各境界は、等分位置の近くで列ごとの画素数が最小の位置（谷）にする。
+ * 接触した文字を、桁数が分かっているときに切り分けるために使う。
+ */
+export function splitInto(mask: Uint8Array, w: number, box: Box, n: number): Box[] {
+  const bw = box.x1 - box.x0 + 1;
+  if (n < 2) return [box];
   const col = (x: number) => {
     let c = 0;
     for (let y = box.y0; y <= box.y1; y++) c += mask[y * w + x];
