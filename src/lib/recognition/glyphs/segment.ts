@@ -185,13 +185,13 @@ const GLYPH_ASPECT = 1.4;
 
 /**
  * 接触した複数の文字が 1 つの成分になっているとき、列ごとの画素数が最小の位置（谷）で分割する。
- * 幅が標準の 1.9 倍以上のときだけ働く。
+ * 幅が標準の 1.6 倍以上のときだけ働く。
  */
 export function splitWide(mask: Uint8Array, w: number, box: Box): Box[] {
   const bw = box.x1 - box.x0 + 1;
   const bh = box.y1 - box.y0 + 1;
   const n = Math.round(bw / bh / GLYPH_ASPECT);
-  if (bw / bh < GLYPH_ASPECT * 1.9 || n < 2) return [box];
+  if (bw / bh < GLYPH_ASPECT * 1.6 || n < 2) return [box];
 
   return splitInto(mask, w, box, n);
 }
