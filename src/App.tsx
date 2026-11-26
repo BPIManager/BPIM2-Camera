@@ -50,13 +50,18 @@ export default function App() {
     );
   }
 
-  const handleCapture = async (image: Blob, source: "camera" | "import") => {
+  const handleCapture = async (image: Blob, source: "camera" | "import", regions?: { score: Blob; title: Blob }) => {
     setBusy(true);
     let raw = null;
     try {
-      const bitmap = await createImageBitmap(image);
-      raw = await recognizerRef.current!.recognize(bitmap).catch(() => null);
-      bitmap.close();
+      const full = await createImageBitmap(image);
+      const crops = regions
+        ? { score: await createImageBitmap(regions.score), title: await createImageBitmap(regions.title) }
+        : undefined;
+      raw = await recognizerRef.current!.recognize({ full, regions: crops }).catch(() => null);
+      full.close();
+      crops?.score.close();
+      crops?.title.close();
     } finally {
       setBusy(false);
     }
@@ -72,7 +77,7 @@ export default function App() {
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col">
       <main className="min-h-0 flex-1">
-        {tab === "camera" && <CameraView active={draft === null} busy={busy} onCapture={handleCapture} />}
+        {tab === "camera" && <CameraView active={draft === null} busy={busy} side={settings.playSide} onCapture={handleCapture} />}
         {tab === "history" && <HistoryView active />}
         {tab === "settings" && <SettingsView settings={settings} update={update} />}
       </main>

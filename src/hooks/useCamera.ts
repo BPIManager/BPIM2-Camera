@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { guideToVideoRect, type Rect, type Size } from "@/lib/vision/framing";
+import type { GuideRects } from "@/lib/vision/guides";
+
+export interface Snapshot {
+  image: Blob;
+  regions?: { score: Blob; title: Blob };
+}
+
+const toBlob = (c: HTMLCanvasElement) => new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/jpeg", 0.92));
 
 export type CameraState = "idle" | "starting" | "ready" | "denied" | "unsupported";
 
@@ -42,17 +50,31 @@ export function useCamera(enabled: boolean) {
     };
   }, [enabled]);
 
-  /** ガイド枠（表示座標）が指定されたら、その範囲だけを切り出す */
-  const snapshot = useCallback(async (guide?: { rect: Rect; view: Size }): Promise<Blob | null> => {
+  /** 全体画像と、ガイド枠（表示座標）で切り出したスコア部・曲名帯を返す */
+  const snapshot = useCallback(async (guides?: { rects: GuideRects; view: Size }): Promise<Snapshot | null> => {
     const v = videoRef.current;
     if (!v || v.videoWidth === 0) return null;
     const src = { width: v.videoWidth, height: v.videoHeight };
-    const r = guide ? guideToVideoRect(guide.rect, guide.view, src) : { x: 0, y: 0, ...src };
-    const c = document.createElement("canvas");
-    c.width = r.width;
-    c.height = r.height;
-    c.getContext("2d")?.drawImage(v, r.x, r.y, r.width, r.height, 0, 0, r.width, r.height);
-    return new Promise((resolve) => c.toBlob(resolve, "image/jpeg", 0.92));
+    const full = document.createElement("canvas");
+    full.width = src.width;
+    full.height = src.height;
+    full.getContext("2d")?.drawImage(v, 0, 0);
+
+    const crop = (r: Rect) => {
+      const c = document.createElement("canvas");
+      c.width = r.width;
+      c.height = r.height;
+      c.getContext("2d")?.drawImage(full, r.x, r.y, r.width, r.height, 0, 0, r.width, r.height);
+      return toBlob(c);
+    };
+    const toRect = (g: Rect) => guideToVideoRect(g, guides!.view, src);
+    const [image, score, title] = await Promise.all([
+      toBlob(full),
+      guides ? crop(toRect(guides.rects.score)) : null,
+      guides ? crop(toRect(guides.rects.title)) : null,
+    ]);
+    if (!image) return null;
+    return { image, regions: score && title ? { score, title } : undefined };
   }, []);
 
   return { videoRef, state, snapshot };
