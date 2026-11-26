@@ -7,7 +7,7 @@ import { numberTokens, parseChartHints, type OcrToken } from "./tokens";
 const TITLE_MIN_LEN = 3;
 
 /** タイトルらしい行: 数字・記号だけでない最長のトークン */
-function guessTitle(tokens: readonly OcrToken[]): string | null {
+export function guessTitle(tokens: readonly OcrToken[]): string | null {
   const words = tokens.map((t) => t.text.trim()).filter((s) => s.length >= TITLE_MIN_LEN && /[A-Za-z぀-ヿ一-鿿]{3}/.test(s));
   return words.sort((a, b) => b.length - a.length)[0] ?? null;
 }
