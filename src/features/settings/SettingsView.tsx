@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Button from "@/components/ui/button";
 import type { Size } from "@/lib/vision/framing";
 import { resolveLayout } from "@/lib/vision/guides";
@@ -8,6 +8,8 @@ import { RadioGroup, RadioItem } from "@/components/ui/radio-group";
 import Switch from "@/components/ui/switch";
 import type { PlaySide } from "@/lib/storage/settings";
 import { clearHistory } from "@/lib/storage/history";
+import { clearSamples, countSamples, listSamples } from "@/lib/storage/samples";
+import { buildTrainingZip } from "@/lib/training/exportZip";
 import type { Settings } from "@/lib/storage/settings";
 
 interface Props {
@@ -30,6 +32,10 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint?: 
 
 export default function SettingsView({ settings, update, viewSize }: Props) {
   const [editingGuides, setEditingGuides] = useState(false);
+  const [sampleCount, setSampleCount] = useState(0);
+  useEffect(() => {
+    void countSamples().then(setSampleCount);
+  }, []);
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 pb-8">
       <div className="flex flex-col gap-2 border-b border-border py-3">
@@ -88,6 +94,40 @@ export default function SettingsView({ settings, update, viewSize }: Props) {
       <Row id="bpim2" label="BPIM2へのスコア登録" hint="BPIM2 ログイン後に使えます（準備中）">
         <Switch id="bpim2" disabled checked={settings.registerToBpim2} onCheckedChange={(v) => update({ registerToBpim2: v })} />
       </Row>
+      <div className="flex flex-col gap-2 border-b border-border py-3">
+        <Label>学習データ</Label>
+        <p className="text-xs text-muted-foreground">
+          統計データの送信に同意していると、確認した結果と切り出した画像（スコア部・曲名帯のみ）が端末に貯まります。いま {sampleCount} 件。
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            variant="outline"
+            disabled={sampleCount === 0}
+            onClick={async () => {
+              const { blob } = await buildTrainingZip(await listSamples());
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `bpim2-camera-training-${Date.now()}.zip`;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 10_000);
+            }}
+          >
+            書き出す
+          </Button>
+          <Button
+            variant="outline"
+            disabled={sampleCount === 0}
+            onClick={async () => {
+              if (!window.confirm("貯めた学習データを削除します。よろしいですか？")) return;
+              await clearSamples();
+              setSampleCount(0);
+            }}
+          >
+            削除
+          </Button>
+        </div>
+      </div>
       <div className="flex flex-col gap-2 pt-6">
         <Button variant="outline" onClick={() => update({ deviceId: crypto.randomUUID() })}>
           端末IDをリセット
