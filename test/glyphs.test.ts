@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyGlyph, readNumber, type DigitModel } from "@/lib/recognition/glyphs/classifier";
-import { GLYPH_H, GLYPH_W, isCyan, normalizeGlyph, segmentGlyphs } from "@/lib/recognition/glyphs/segment";
+import { GLYPH_H, GLYPH_W, isCyan, isWhite, normalizeGlyph, segmentGlyphs } from "@/lib/recognition/glyphs/segment";
 
 /** テスト用の 5×7 ドット数字（実機のフォントではない。分割・判定の仕組みの検証用） */
 const FONT: Record<number, string[]> = {
@@ -108,6 +108,13 @@ describe("色マスク / 正規化", () => {
     expect(isCyan(20, 200, 240)).toBe(true);
     expect(isCyan(250, 250, 250)).toBe(false);
     expect(isCyan(240, 40, 40)).toBe(false);
+  });
+
+  it("白は明るく色味が薄い画素だけ（水色・暗い灰色・赤は対象外）", () => {
+    expect(isWhite(240, 240, 235)).toBe(true);
+    expect(isWhite(20, 200, 240)).toBe(false);
+    expect(isWhite(90, 90, 90)).toBe(false);
+    expect(isWhite(240, 60, 60)).toBe(false);
   });
 
   it("正規化ベクトルの長さは GLYPH_W × GLYPH_H", () => {

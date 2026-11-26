@@ -23,6 +23,11 @@ export function isCyan(r: number, g: number, b: number): boolean {
   return hue >= 160 && hue <= 215;
 }
 
+/** 白い画素か（ジャッジ表の判定数・ランクの差分表示）。明るく、色味が薄い */
+export function isWhite(r: number, g: number, b: number): boolean {
+  return Math.min(r, g, b) >= 160 && Math.max(r, g, b) - Math.min(r, g, b) <= 80;
+}
+
 export function colorMask(rgba: Uint8ClampedArray, pred: (r: number, g: number, b: number) => boolean): Uint8Array {
   const out = new Uint8Array(rgba.length / 4);
   for (let i = 0, p = 0; i < out.length; i++, p += 4) out[i] = pred(rgba[p], rgba[p + 1], rgba[p + 2]) ? 1 : 0;
