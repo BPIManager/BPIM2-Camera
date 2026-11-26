@@ -2,7 +2,7 @@
   "version": "seed-0",
   "songs": [
     { "songId": 1, "title": "HEARTACHE", "playStyle": "SP", "difficulty": "ANOTHER", "level": 10, "notes": 930 },
-    { "songId": 2, "title": "UNDO THE NIGHT", "playStyle": "SP", "difficulty": "ANOTHER", "level": 12, "notes": 1774 },
+    { "songId": 2, "title": "UNDO THE NIGHT", "playStyle": "SP", "difficulty": "ANOTHER", "level": 12, "notes": 1787 },
     { "songId": 3, "title": "Angel's Ladder", "playStyle": "SP", "difficulty": "ANOTHER", "level": 12, "notes": 1775 },
     { "songId": 4, "title": "Boomy and The Boost", "playStyle": "SP", "difficulty": "ANOTHER", "level": 12, "notes": 1813 }
   ]
