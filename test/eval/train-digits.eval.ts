@@ -14,12 +14,18 @@ interface Sample {
   image: string;
   digits: string;
   hint: { x: number; y: number };
+  /** ラベル作成ツールで保存した桁ごとの外接矩形（長辺 1600px 縮小画像の座標）。あれば自動検出より優先 */
+  boxes?: { x0: number; y0: number; x1: number; y1: number }[];
 }
 
 /** 画像全体から数字列を探し、ヒント位置に最も近い候補の桁を切り出す。桁数が合わなければ null */
 async function glyphsOf(s: Sample): Promise<Glyph[] | null> {
   const { data, info } = await sharp(path.join(DIR, s.image)).rotate().resize({ width: 1600, height: 1600, fit: "inside" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const rgba = new Uint8ClampedArray(data);
+  if (s.boxes?.length === s.digits.length) {
+    const m = colorMask(rgba, isCyan);
+    return s.boxes.map((b) => ({ x: b.x0, y: b.y0, width: b.x1 - b.x0 + 1, height: b.y1 - b.y0 + 1, vector: normalizeGlyph(m, info.width, { ...b }) }));
+  }
   const chains = locateScoreChains(rgba, info.width, info.height, 12).filter((c) => c.boxes.length === s.digits.length);
   if (chains.length === 0) return null;
   const hx = (s.hint.x / 100) * info.width;
