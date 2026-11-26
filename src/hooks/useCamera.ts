@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { guideToVideoRect, type Rect, type Size } from "@/lib/vision/framing";
-import type { GuideRects } from "@/lib/vision/guides";
+import { GUIDE_KEYS, type GuideKey, type GuideRects } from "@/lib/vision/guides";
 
 export interface Snapshot {
   image: Blob;
-  regions?: { score: Blob; title: Blob };
+  regions?: Record<GuideKey, Blob>;
 }
 
 const toBlob = (c: HTMLCanvasElement) => new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/jpeg", 0.92));
@@ -68,13 +68,12 @@ export function useCamera(enabled: boolean) {
       return toBlob(c);
     };
     const toRect = (g: Rect) => guideToVideoRect(g, guides!.view, src);
-    const [image, score, title] = await Promise.all([
-      toBlob(full),
-      guides ? crop(toRect(guides.rects.score)) : null,
-      guides ? crop(toRect(guides.rects.title)) : null,
-    ]);
+    const image = await toBlob(full);
     if (!image) return null;
-    return { image, regions: score && title ? { score, title } : undefined };
+    if (!guides) return { image };
+    const crops = await Promise.all(GUIDE_KEYS.map(async (k) => [k, await crop(toRect(guides.rects[k]))] as const));
+    if (crops.some(([, b]) => !b)) return { image };
+    return { image, regions: Object.fromEntries(crops) as Record<GuideKey, Blob> };
   }, []);
 
   return { videoRef, state, snapshot };

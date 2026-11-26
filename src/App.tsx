@@ -11,6 +11,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { resolveResult } from "@/lib/recognition/resolve";
+import type { GuideKey } from "@/lib/vision/guides";
 import { cn } from "@/lib/utils";
 
 type Tab = "camera" | "history" | "settings";
@@ -53,18 +54,22 @@ export default function App() {
     );
   }
 
-  const handleCapture = async (image: Blob, source: "camera" | "import", regions?: { score: Blob; title: Blob }) => {
+  const handleCapture = async (image: Blob, source: "camera" | "import", regions?: Record<GuideKey, Blob>) => {
     setBusy(true);
     let raw = null;
     try {
       const full = await createImageBitmap(image);
       const crops = regions
-        ? { score: await createImageBitmap(regions.score), title: await createImageBitmap(regions.title) }
+        ? ({
+            score: await createImageBitmap(regions.score),
+            title: await createImageBitmap(regions.title),
+            rank: await createImageBitmap(regions.rank),
+            judge: await createImageBitmap(regions.judge),
+          } satisfies Record<GuideKey, ImageBitmap>)
         : undefined;
       raw = await recognizerRef.current!.recognize({ full, regions: crops }).catch(() => null);
       full.close();
-      crops?.score.close();
-      crops?.title.close();
+      if (crops) for (const b of Object.values(crops)) b.close();
     } finally {
       setBusy(false);
     }

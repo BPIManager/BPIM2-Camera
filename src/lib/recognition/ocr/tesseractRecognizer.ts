@@ -1,5 +1,6 @@
 import type { RawResult } from "@/lib/domain/types";
 import type { SongMasterEntry } from "@/lib/songs/types";
+import type { GuideKey } from "@/lib/vision/guides";
 import { rawFromTokens } from "../fromTokens";
 import { chartResolvedByHints, rawFromRegions } from "../fromRegions";
 import { loadDigitModel } from "../glyphs/modelLoader";
@@ -75,7 +76,7 @@ export class TesseractRecognizer implements Recognizer {
   }
 
   /** ガイド枠で切り出したスコア部と曲名帯をそれぞれ読む。スコアは数字だけを許可して複数の前処理で投票する */
-  private async recognizeRegions(regions: { score: ImageBitmap; title: ImageBitmap }): Promise<RawResult | null> {
+  private async recognizeRegions(regions: Pick<Record<GuideKey, ImageBitmap>, "score" | "title">): Promise<RawResult | null> {
     const { PSM } = await import("tesseract.js");
     const worker = await this.ensureWorker();
     const base = { tessedit_pageseg_mode: PSM.SPARSE_TEXT };

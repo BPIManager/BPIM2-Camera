@@ -3,7 +3,7 @@ import { ImagePlus } from "lucide-react";
 import Button from "@/components/ui/button";
 import { useCamera } from "@/hooks/useCamera";
 import type { Size } from "@/lib/vision/framing";
-import { guideRects, type CustomGuides } from "@/lib/vision/guides";
+import { GUIDE_KEYS, GUIDE_LABELS, guideRects, type CustomGuides, type GuideKey } from "@/lib/vision/guides";
 import type { PlaySide } from "@/lib/storage/settings";
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
   guides: CustomGuides;
   /** 表示領域の大きさ。設定の枠調整で同じ縦横比を使う */
   onViewSize: (size: Size) => void;
-  onCapture: (image: Blob, source: "camera" | "import", regions?: { score: Blob; title: Blob }) => void;
+  onCapture: (image: Blob, source: "camera" | "import", regions?: Record<GuideKey, Blob>) => void;
 }
 
 /** スコアと曲名帯の位置を白枠で示す（1P/2P で左右反転）。シャッター時は各枠の中を切り出して読み取る */
@@ -43,12 +43,7 @@ export default function CameraView({ active, busy, side, guides, onViewSize, onC
     <div className="relative flex h-full flex-col bg-background">
       <div ref={viewRef} className="relative min-h-0 flex-1 overflow-hidden">
         <video ref={videoRef} className="size-full object-cover" playsInline muted />
-        {(
-          [
-            ["スコア", rects.score],
-            ["曲名・譜面", rects.title],
-          ] as const
-        ).map(([label, r]) => (
+        {GUIDE_KEYS.map((key) => [GUIDE_LABELS[key], rects[key]] as const).map(([label, r]) => (
           <div
             key={label}
             className="pointer-events-none absolute rounded-sm border-2 border-guide"
@@ -58,7 +53,7 @@ export default function CameraView({ active, busy, side, guides, onViewSize, onC
           </div>
         ))}
         <p className="pointer-events-none absolute inset-x-0 top-3 text-center text-sm font-medium">
-          スコアと曲名を白枠に重ねてください
+          白枠を画面の各部分に重ねてください
         </p>
         {busy && (
           <p className="absolute inset-x-0 bottom-6 text-center text-sm font-medium" role="status">
