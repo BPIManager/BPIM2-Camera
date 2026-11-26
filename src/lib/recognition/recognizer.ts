@@ -10,7 +10,7 @@ export interface Recognizer {
 
 /** 読み取り器が未導入のときの代替。常に読めなかったとして手入力へ回す */
 export class NullRecognizer implements Recognizer {
-  async recognize(): Promise<RawResult | null> {
+  async recognize(_frame: ImageBitmap): Promise<RawResult | null> {
     return null;
   }
 }
