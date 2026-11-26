@@ -17,7 +17,7 @@ function ocrDebugLog(): Plugin {
       // 撮影した画像と切り出し画像を internal/captures に保存する（git 管理外）
       server.middlewares.use("/__debug/img", (req, res) => {
         const name = new URL(req.url ?? "", "http://x").searchParams.get("name") ?? "";
-        if (!/^[w.-]+$/.test(name)) {
+        if (!/^[A-Za-z0-9_.-]+$/.test(name) || name.includes("..")) {
           res.statusCode = 400;
           res.end();
           return;
