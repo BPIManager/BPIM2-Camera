@@ -11,7 +11,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
 import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
 import { WorkerOcrEngine } from "@/lib/recognition/paddle/workerEngine";
-import { logDebug } from "@/lib/debug/ocrLog";
+import { logDebug, saveCaptures } from "@/lib/debug/ocrLog";
 import type { Recognizer } from "@/lib/recognition/recognizer";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { resolveResult } from "@/lib/recognition/resolve";
@@ -75,7 +75,9 @@ export default function App() {
             judge: await createImageBitmap(regions.judge),
           } satisfies Record<GuideKey, ImageBitmap>)
         : undefined;
-      logDebug(`撮影: ${source} / 枠で切り出し: ${crops ? "あり" : "なし"} / 分離ページ: ${self.crossOriginIsolated}`);
+      const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+      saveCaptures(stamp, { full: image, ...(regions ?? {}) });
+      logDebug(`撮影（保存: internal/captures/${stamp}_*）: ${source} / 枠で切り出し: ${crops ? "あり" : "なし"} / 分離ページ: ${self.crossOriginIsolated}`);
       raw = await recognizerRef.current!.recognize({ full, regions: crops }).catch((e: unknown) => {
         logDebug("読み取りに失敗: " + (e instanceof Error ? e.stack ?? e.message : String(e)));
         return null;

@@ -32,3 +32,12 @@ export function logOcr(e: OcrDebugEntry): void {
   ];
   logDebug(...lines);
 }
+
+/** 撮影した画像と切り出し画像を、開発サーバー（internal/captures）に保存する。枠のずれや画質の確認用 */
+export function saveCaptures(prefix: string, blobs: Record<string, Blob>): void {
+  if (!import.meta.env.DEV) return;
+  for (const [key, blob] of Object.entries(blobs)) {
+    const ext = blob.type.includes("png") ? "png" : "jpg";
+    void fetch(`/__debug/img?name=${encodeURIComponent(`${prefix}_${key}.${ext}`)}`, { method: "POST", body: blob, keepalive: false }).catch(() => undefined);
+  }
+}

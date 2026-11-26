@@ -55,3 +55,16 @@ describe("誤確定の防止", () => {
     expect(raw?.exScore.value ?? null).toBeNull();
   });
 });
+
+describe("parseChartHints: 難易度の文字の揺れ", () => {
+  it("ANOTHER が AWOTHER と読まれても難易度とレベルを取れる", async () => {
+    const { parseChartHints } = await import("@/lib/recognition/tokens");
+    const h = parseChartHints([{ text: "AWOTHER9", confidence: 80 }]);
+    expect(h.difficulty).toBe("ANOTHER");
+    expect(h.level).toBe(9);
+  });
+  it("関係のない単語は難易度にしない", async () => {
+    const { parseChartHints } = await import("@/lib/recognition/tokens");
+    expect(parseChartHints([{ text: "MUSIC TO YOUR HEAD 12", confidence: 80 }]).difficulty).toBeNull();
+  });
+});

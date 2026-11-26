@@ -1,4 +1,5 @@
 import type { Difficulty, PlayStyle } from "@/lib/domain/types";
+import { editDistance } from "@/lib/songs/normalize";
 
 export interface OcrToken {
   text: string;
@@ -34,6 +35,19 @@ export function parseChartHints(tokens: readonly OcrToken[]): ChartHints {
       const lv = Number(toDigits(m[1]));
       level = lv >= 1 && lv <= 12 ? lv : null;
       break;
+    }
+  }
+
+  // 文字の取り違え（ANOTHER → AWOTHER など）に備え、編集距離が近い単語も難易度とみなす
+  if (difficulty === null) {
+    for (const m of text.matchAll(/([A-Z]{5,11})s*([0-9OIl]{1,2})(?![0-9])/g)) {
+      const best = DIFFICULTIES.map((d) => ({ d, dist: editDistance(m[1], d) })).sort((a, b) => a.dist - b.dist)[0];
+      if (best.dist <= Math.max(1, Math.floor(best.d.length * 0.2))) {
+        difficulty = best.d;
+        const lv = Number(toDigits(m[2]));
+        level = lv >= 1 && lv <= 12 ? lv : null;
+        break;
+      }
     }
   }
 

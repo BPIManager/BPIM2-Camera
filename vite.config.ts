@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vitest/config";
 import type { Plugin } from "vite";
@@ -13,6 +14,24 @@ function ocrDebugLog(): Plugin {
     name: "ocr-debug-log",
     apply: "serve",
     configureServer(server) {
+      // 撮影した画像と切り出し画像を internal/captures に保存する（git 管理外）
+      server.middlewares.use("/__debug/img", (req, res) => {
+        const name = new URL(req.url ?? "", "http://x").searchParams.get("name") ?? "";
+        if (!/^[w.-]+$/.test(name)) {
+          res.statusCode = 400;
+          res.end();
+          return;
+        }
+        const chunks: Buffer[] = [];
+        req.on("data", (c: Buffer) => chunks.push(c));
+        req.on("end", () => {
+          const dir = path.resolve(import.meta.dirname, "internal/captures");
+          mkdirSync(dir, { recursive: true });
+          writeFileSync(path.join(dir, name), Buffer.concat(chunks));
+          res.statusCode = 204;
+          res.end();
+        });
+      });
       server.middlewares.use("/__debug/ocr", (req, res) => {
         let body = "";
         req.on("data", (c) => (body += c));
