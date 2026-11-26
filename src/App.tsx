@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Toaster } from "sonner";
+import ConfirmDialog from "@/components/confirm-dialog";
+import { saveImage } from "@/lib/share/save";
 import { Camera, History, Settings as SettingsIcon } from "lucide-react";
 import CameraView from "@/features/camera/CameraView";
 import HistoryView from "@/features/history/HistoryView";
@@ -45,6 +47,8 @@ export default function App() {
   const { songs } = useMaster();
   const [tab, setTab] = useState<Tab>("camera");
   const [draft, setDraft] = useState<Draft | null>(null);
+  // 読み取りを中止したとき、画像だけ保存するかを確かめる（自動保存がオンのときだけ）。保存は、この確認の操作のあとに行う（iOS は操作の直後でないと共有シートを開けない）
+  const [unsaved, setUnsaved] = useState<Blob | null>(null);
   // アプリとして追加する案内。アプリとして開いていないときは、ページを開くたびに自動で出す（追加できる端末のときだけ）。
   // 「あとで」で閉じたら、そのページを開いている間は出さない（開き直すと、また出る）。設定からも開ける
   const installMode = useInstallMode();
@@ -127,7 +131,10 @@ export default function App() {
       abortRef.current = null;
     }
     // 中止したときは、結果の画面を出さず、撮影に戻る
-    if (cancelled) return;
+    if (cancelled) {
+      if (settings.saveToCameraRoll && source === "camera") setUnsaved(image);
+      return;
+    }
     setDraft({
       id: crypto.randomUUID(),
       image,
@@ -168,6 +175,19 @@ export default function App() {
           </button>
         ))}
       </nav>
+      <ConfirmDialog
+        open={unsaved !== null}
+        onClose={() => setUnsaved(null)}
+        title="画像を保存しますか？"
+        description="読み取りを中止しました。撮影した画像だけ、保存できます。"
+        confirmLabel="保存する"
+        cancelLabel="保存しない"
+        onConfirm={() => {
+          const image = unsaved;
+          setUnsaved(null);
+          if (image) void saveImage(image, `iidx-${Date.now()}.jpg`);
+        }}
+      />
       <Toaster position="top-center" theme="dark" offset="calc(env(safe-area-inset-top) + 0.75rem)" toastOptions={{ classNames: { toast: "!border-border !bg-card !text-foreground", description: "!text-muted-foreground" } }} />
       {(autoInstall || installOpen) && (
         <InstallDialog
