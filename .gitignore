@@ -6,3 +6,4 @@ dist
 .hallmark/
 .wrangler
 *.tsbuildinfo
+eval-out.txt
