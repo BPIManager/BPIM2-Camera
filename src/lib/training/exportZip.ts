@@ -17,12 +17,14 @@ export interface TrainingLabel {
   correctedFields: string[];
   scoreImage: string;
   titleImage: string;
+  rankImage?: string;
+  judgeImage?: string;
 }
 
 const bytes = async (b: Blob) => new Uint8Array(await b.arrayBuffer());
 
 /**
- * 学習サンプルを zip にまとめる。画像は枠で切り出したスコア部と曲名帯だけ（全体画像や位置情報は含めない）。
+ * 学習サンプルを zip にまとめる。画像は枠で切り出したスコア部・曲名帯・DJ LEVEL 行・判定表だけ（全体画像や位置情報は含めない）。
  * labels.json に正解ラベルを入れる。
  */
 export async function buildTrainingZip(samples: readonly TrainingSample[]): Promise<{ blob: Blob; labels: TrainingLabel[] }> {
@@ -33,6 +35,10 @@ export async function buildTrainingZip(samples: readonly TrainingSample[]): Prom
     const titleImage = `images/${s.id}_title.jpg`;
     files[scoreImage] = await bytes(s.scoreCrop);
     files[titleImage] = await bytes(s.titleCrop);
+    const rankImage = s.rankCrop ? `images/${s.id}_rank.jpg` : undefined;
+    const judgeImage = s.judgeCrop ? `images/${s.id}_judge.jpg` : undefined;
+    if (rankImage && s.rankCrop) files[rankImage] = await bytes(s.rankCrop);
+    if (judgeImage && s.judgeCrop) files[judgeImage] = await bytes(s.judgeCrop);
     labels.push({
       id: s.id,
       createdAt: s.createdAt,
@@ -48,6 +54,8 @@ export async function buildTrainingZip(samples: readonly TrainingSample[]): Prom
       correctedFields: s.correctedFields,
       scoreImage,
       titleImage,
+      rankImage,
+      judgeImage,
     });
   }
   files["labels.json"] = new TextEncoder().encode(JSON.stringify(labels, null, 2));

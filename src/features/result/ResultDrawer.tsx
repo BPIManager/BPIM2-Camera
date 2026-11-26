@@ -48,6 +48,8 @@ export default function ResultDrawer({ draft, songs, settings, onClose }: Props)
         correctedFields: ed.record.correctedFields,
         scoreCrop: draft.regions.score,
         titleCrop: draft.regions.title,
+        rankCrop: draft.regions.rank,
+        judgeCrop: draft.regions.judge,
       });
     }
     if (settings.saveToCameraRoll && draft.source === "camera") {
