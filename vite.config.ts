@@ -29,6 +29,8 @@ export default defineConfig({
       workbox: { globPatterns: ["**/*.{js,css,html,png,json,wasm}"] },
     }),
   ],
+  // tailscale serve 経由（*.ts.net）でスマホから開けるようにする
+  server: { host: true, allowedHosts: [".ts.net"] },
   resolve: { alias: { "@": path.resolve(__dirname, "src") } },
   test: { environment: "node", include: ["test/**/*.test.ts"] },
 });
