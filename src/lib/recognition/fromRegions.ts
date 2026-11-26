@@ -28,19 +28,21 @@ export function rawFromRegions(
   judgePool: readonly JudgeRead[] = [],
   /** 複数の読みが指している値（確度の合算が高いもの。前処理の種類は問わない）。PG と矛盾しないときだけ採る */
   strongValues: readonly number[] = [],
+  /** 曲名の枠に写っていた文字の行（アーティスト名の候補）。曲データのアーティスト名との照合に使う */
+  artistTexts: readonly string[] = [],
 ): RawResult | null {
   const hints = parseChartHints(titleTokens);
   const titleText = japaneseTitle?.trim() || guessTitle(titleTokens);
   // レベルの読み違い（II を 1 と読むなど）に備え、確定しなければレベルを外して照合し直す
-  let match = matchChart(master, { ...hints, titleText });
+  let match = matchChart(master, { ...hints, titleText, artistTexts });
   if (!match.confident) {
     // 1) ノーツ数が読めていれば、レベルを外して（難易度＋ノーツ数＋曲名）で絞る。2) それも外れたら、レベルとノーツ数を外して曲名で絞る
     const attempts = [
       ...(hints.notes !== null ? [{ ...hints, level: null }] : []),
-      ...(titleText ? [{ ...hints, level: null, notes: null }] : []),
+      ...(titleText || artistTexts.length > 0 ? [{ ...hints, level: null, notes: null }] : []),
     ];
     for (const a of attempts) {
-      const relaxed = matchChart(master, { ...a, titleText });
+      const relaxed = matchChart(master, { ...a, titleText, artistTexts });
       if (relaxed.confident) {
         match = relaxed;
         break;

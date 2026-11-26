@@ -146,5 +146,5 @@ export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntr
   const scoreSet = new Set(scoreReadings.flat().map(Number).filter((n) => Number.isInteger(n)));
   const judge = r.judge ? judgeFromReads(r.judge, scoreSet) : undefined;
   const extras = judge && (judge.pg !== undefined || judge.gr !== undefined) ? { judge } : undefined;
-  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true, crossGroupValues(r.score, r.scoreGroups), mergeReads((r.judge ?? []).flatMap((lines) => parseJudgeReads(lines))), evidenceScoreValues(r.score));
+  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true, crossGroupValues(r.score, r.scoreGroups), mergeReads((r.judge ?? []).flatMap((lines) => parseJudgeReads(lines))), evidenceScoreValues(r.score), r.title.map((l) => l.text));
 }

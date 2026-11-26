@@ -17,11 +17,14 @@ const META = /NOTES?|ANOTHER|HYPER|LEGGENDARIA/i;
 
 describe("paddle E2E", () => {
   it("曲・EX の確定率を測る", async () => {
-    const master: SongMasterEntry[] = JSON.parse(readFileSync("internal/master.local.json", "utf8")).songs;
+    const base: SongMasterEntry[] = JSON.parse(readFileSync("internal/master.local.json", "utf8")).songs;
+    // ARTISTS=1 のとき、曲データにアーティスト名を足して、効果を比べる
+    const artists: Record<string, string> = process.env.ARTISTS ? JSON.parse(readFileSync("internal/artists.local.json", "utf8")) : {};
+    const master = base.map((s) => (artists[s.title] ? { ...s, artist: artists[s.title] } : s));
     const labels = JSON.parse(readFileSync("internal/labels.local.json", "utf8")) as Label[];
     const engine = await createNodeEngine("small");
     const out: string[] = [];
-    const t = { n: 0, confirmedOk: 0, confirmedBad: 0, unconfirmed: 0, candOk: 0 };
+    const t = { n: 0, confirmedOk: 0, confirmedBad: 0, unconfirmed: 0, candOk: 0, chartKnown: 0 };
     for (const l of labels) {
       if (!l.digits || !l.boxes || !l.size) continue;
       const S = l.size;
@@ -53,6 +56,7 @@ describe("paddle E2E", () => {
       }
       const raw = rawFromPaddle({ title, score, scoreGroups: ["color", "color", "raw"], judge: judge ? [judge] : undefined }, master);
       t.n++;
+      if (raw?.notes != null) t.chartKnown++;
       const v = raw?.exScore.value ?? null;
       const status = v === null ? "未確定" : String(v) === l.digits ? "確定○" : "確定×";
       if (v === null) { t.unconfirmed++; if (raw?.exCandidates?.includes(Number(l.digits))) t.candOk++; }

@@ -311,3 +311,37 @@ describe("実機のログ（少年は空を辿る）", () => {
     expect(matchChart(similar, { playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: null, titleText: "少年は空を越" }).confident).toBe(false);
   });
 });
+
+describe("アーティスト名を使った曲の特定", () => {
+  const m = (songId: number, title: string, artist: string, level: number, notes: number) => ({ songId, title, artist, playStyle: "SP" as const, difficulty: "ANOTHER" as const, level, notes });
+  const master: SongMasterEntry[] = [
+    m(5252, "少年は空を辿る", "Power Of Nature", 12, 1729),
+    m(1, "少年は空を渡る", "Someone Else", 12, 1600),
+    m(2, "RINNE", "Sota Fujimori", 12, 1788),
+    m(3, "Verflucht", "Tyrfing", 12, 2401),
+    m(4, "Another Tyrfing Song", "Tyrfing", 12, 1900),
+  ];
+  it("曲名が崩れて似た曲名が並ぶとき（少年は空を越）、アーティスト名（Power Of Naturo）で決まる", async () => {
+    const { matchChart } = await import("@/lib/songs/matcher");
+    const r = matchChart(master, { playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: null, titleText: "少年は空を越", artistTexts: ["少年は空を越", "Power Of Naturo", "ANOTHER 12"] });
+    expect(r.confident).toBe(true);
+    expect(r.candidates[0].entry.songId).toBe(5252);
+  });
+  it("曲名が読めなくても、アーティスト名が 1 曲に絞れれば決まる", async () => {
+    const { matchChart } = await import("@/lib/songs/matcher");
+    const r = matchChart(master, { playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: null, titleText: null, artistTexts: ["Power Of Nature"] });
+    expect(r.candidates[0].entry.songId).toBe(5252);
+    expect(r.confident).toBe(true);
+  });
+  it("同じアーティストの曲が複数あり、曲名も読めないときは、確定しない", async () => {
+    const { matchChart } = await import("@/lib/songs/matcher");
+    const r = matchChart(master, { playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: null, titleText: null, artistTexts: ["Tyrfing"] });
+    expect(r.confident).toBe(false);
+  });
+  it("アーティスト名が曲データになければ、従来どおり曲名だけで判断する", async () => {
+    const { matchChart } = await import("@/lib/songs/matcher");
+    const noArtist = master.map(({ artist: _a, ...rest }) => rest);
+    const r = matchChart(noArtist, { playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: null, titleText: "RINNE", artistTexts: ["Sota Fujimori"] });
+    expect(r.candidates[0].entry.songId).toBe(2);
+  });
+});

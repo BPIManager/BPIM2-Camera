@@ -8,6 +8,8 @@ export interface MatchQuery {
   level: number | null;
   notes: number | null;
   titleText: string | null;
+  /** 曲名の枠に写っていた文字（アーティスト名の候補）。曲データにアーティスト名があれば、曲名と合わせて使う */
+  artistTexts?: readonly string[];
 }
 
 export interface MatchCandidate {
@@ -23,6 +25,23 @@ export interface MatchOutcome {
 }
 
 const CONFIDENT_SCORE = 0.85;
+/**
+ * アーティスト名の重み。同じアーティストの曲は複数あるので、曲名がしっかり読めているときは、
+ * 小さな上乗せにとどめる（他の曲まで点数が持ち上がって、正しい曲との差が縮まらないように）。
+ * 曲名がほとんど読めていないときだけ、強く使う。
+ */
+const ARTIST_WEIGHT_WITH_TITLE = 0.6;
+const ARTIST_WEIGHT_WITHOUT_TITLE = 0.9;
+const TITLE_READABLE = 0.5;
+const ARTIST_MIN_SIMILARITY = 0.6;
+const ARTIST_MIN_LENGTH = 3;
+
+/** 写っていた文字のうち、アーティスト名に最も近いものとの類似度。近くなければ 0 */
+function artistSimilarity(texts: readonly string[] | undefined, artist: string | undefined): number {
+  if (!texts?.length || !artist || normalizeTitle(artist).length < ARTIST_MIN_LENGTH) return 0;
+  const best = Math.max(...texts.map((t) => titleSimilarity(t, artist)));
+  return best >= ARTIST_MIN_SIMILARITY ? best : 0;
+}
 /** 曲名が少し崩れていても、2 位を大きく引き離していれば確定してよい（OCR で末尾が欠けるなど） */
 const LEAD_SCORE = 0.65;
 const LEAD_GAP = 0.25;
@@ -53,13 +72,20 @@ export function matchChart(master: readonly SongMasterEntry[], q: MatchQuery): M
     seen.add(key);
     return true;
   });
+  const titleScores = distinct.map((entry) => (q.titleText ? titleSimilarity(q.titleText, entry.title) : 0));
+  const artistWeight = Math.max(0, ...titleScores) >= TITLE_READABLE ? ARTIST_WEIGHT_WITH_TITLE : ARTIST_WEIGHT_WITHOUT_TITLE;
   const scored = distinct
-    .map((entry) => ({ entry, score: q.titleText ? titleSimilarity(q.titleText, entry.title) : 0 }))
+    .map((entry, i) => {
+      const t = titleScores[i];
+      const a = artistSimilarity(q.artistTexts, entry.artist) * artistWeight;
+      // 曲名が合っていれば、そこにアーティスト名の分を少し上乗せする。曲名が読めていなければ、アーティスト名が主になる
+      return { entry, score: t + (1 - t) * a };
+    })
     .sort((a, b) => b.score - a.score);
   const top = scored.slice(0, 3);
   const second = scored[1]?.score ?? 0;
   const confident =
-    !!q.titleText &&
+    (!!q.titleText || !!q.artistTexts?.length) &&
     ((top[0].score >= CONFIDENT_SCORE && top[0].score - second >= 0.1) ||
       (top[0].score >= LEAD_SCORE && top[0].score - second >= LEAD_GAP) ||
       // 難易度とレベルで 1 件に絞れていれば、曲名が少し崩れていても確定してよい
