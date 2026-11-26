@@ -1,5 +1,5 @@
 import type { Difficulty, PlayStyle } from "@/lib/domain/types";
-import { titleSimilarity } from "./normalize";
+import { normalizeTitle, titleSimilarity } from "./normalize";
 import type { SongMasterEntry } from "./types";
 
 export interface MatchQuery {
@@ -42,7 +42,15 @@ export function matchChart(master: readonly SongMasterEntry[], q: MatchQuery): M
     return { candidates: [{ entry: narrowed[0], score: 1 }], confident: true };
   }
 
-  const scored = narrowed
+  // 表記ゆれ（… と ... など）で二重に登録された同じ譜面は 1 つにまとめる。BPI は曲名と難易度で計算するので影響しない
+  const seen = new Set<string>();
+  const distinct = narrowed.filter((e) => {
+    const key = [normalizeTitle(e.title), e.playStyle, e.difficulty, e.level, e.notes].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const scored = distinct
     .map((entry) => ({ entry, score: q.titleText ? titleSimilarity(q.titleText, entry.title) : 0 }))
     .sort((a, b) => b.score - a.score);
   const top = scored.slice(0, 3);
@@ -51,7 +59,7 @@ export function matchChart(master: readonly SongMasterEntry[], q: MatchQuery): M
     !!q.titleText &&
     ((top[0].score >= CONFIDENT_SCORE && top[0].score - second >= 0.1) ||
       // 難易度とレベルで 1 件に絞れていれば、曲名が少し崩れていても確定してよい
-      (narrowed.length === 1 && q.difficulty !== null && q.level !== null && top[0].score >= 0.6));
+      (distinct.length === 1 && q.difficulty !== null && q.level !== null && top[0].score >= 0.6));
   return { candidates: top, confident };
 }
 

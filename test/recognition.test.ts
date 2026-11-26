@@ -84,3 +84,14 @@ describe("vision", () => {
     expect(v.push(26)).toBeNull();
   });
 });
+
+describe("matchChart: 表記ゆれで二重登録された譜面", () => {
+  it("同じ譜面の重複は 1 つにまとめ、曲名が合えば確定する", async () => {
+    const { matchChart } = await import("@/lib/songs/matcher");
+    const entry = (songId: number, title: string) => ({ songId, title, playStyle: "SP" as const, difficulty: "ANOTHER" as const, level: 9, notes: 891 });
+    const master = [entry(1867, "with you…"), entry(5707, "with you..."), { ...entry(1959, "With your Smile"), level: 8, notes: 788 }];
+    const r = matchChart(master, { playStyle: "SP", difficulty: "ANOTHER", level: 9, notes: null, titleText: "with you" });
+    expect(r.confident).toBe(true);
+    expect(r.candidates[0].entry.notes).toBe(891);
+  });
+});
