@@ -16,3 +16,7 @@ BPI は ☆11・☆12 のみ算出する。☆10 以下も読み取り・履歴�
 - 数字読み取り器は未実装（`NullRecognizer`）。撮影・取り込み後は曲検索と EX 入力の手入力に回る
 - 曲マスタは暫定シード（`public/data/songs-master.json`）。BPIM2 側に allSongs 配信エンドポイントが必要
 - 統計データ送信（R2）は署名付き URL 発行 Worker が未実装
+
+## ライセンス
+
+[AGPL-3.0](LICENSE)
