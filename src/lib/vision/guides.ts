@@ -40,33 +40,55 @@ export const GUIDE_LAYOUTS: Record<PlaySide, GuideLayout> = {
   "2P": mirrorLayout(LAYOUT_1P),
 };
 
-/** 保存された調整。古い設定は一部の枠だけを持つので、足りない枠は既定値で補う */
+/** 保存されたキャリブレーション結果（旧版の 1P/2P 別の保存値。移行にだけ使う） */
 export type CustomGuides = Partial<Record<PlaySide, Partial<GuideLayout>>>;
 
-/**
- * 使う配置を決める。ユーザーが調整した配置を優先し（足りない枠は既定値）、
- * 反対側だけ調整済みならそれを左右反転して使う。どちらもなければ既定値。
- */
-export function resolveLayout(side: PlaySide, custom: CustomGuides | undefined): GuideLayout {
+/** 旧版の設定（プレーサイドと 1P/2P 別の調整）から、いまの 1 つの配置へ移す。調整がなければ null */
+export function migrateLegacyLayout(side: PlaySide, custom: CustomGuides | undefined): GuideLayout | null {
+  const otherSide: PlaySide = side === "1P" ? "2P" : "1P";
   const own = custom?.[side];
   if (own) return { ...GUIDE_LAYOUTS[side], ...own };
-  const otherSide: PlaySide = side === "1P" ? "2P" : "1P";
   const other = custom?.[otherSide];
-  return other ? mirrorLayout({ ...GUIDE_LAYOUTS[otherSide], ...other }) : GUIDE_LAYOUTS[side];
+  return other ? mirrorLayout({ ...GUIDE_LAYOUTS[otherSide], ...other }) : null;
+}
+
+/** 使う配置。キャリブレーション済みならそれ、なければ既定値（1P） */
+export function resolveLayout(custom: GuideLayout | null | undefined): GuideLayout {
+  return custom ?? GUIDE_LAYOUTS["1P"];
+}
+
+/** スコア枠が画面の左右どちらにあるかから、プレーサイドを推定する（学習サンプルのメタ情報用） */
+export function inferSide(layout: GuideLayout): PlaySide {
+  return layout.score.x + layout.score.width / 2 < 0.5 ? "1P" : "2P";
 }
 
 export type GuideRects = Record<GuideKey, Rect>;
 
-export function layoutToRects(layout: GuideLayout, view: Size): GuideRects {
+/**
+ * 枠の基準になる矩形。キャリブレーションに使った写真の縦横比（幅 / 高さ）で、表示領域に収まる最大の矩形を中央に置く。
+ * 枠は写真に対する割合で保存しているので、写真とカメラの縦横比が違っても、写真と同じ構図で撮れば枠が合う。
+ * 縦横比が未設定（キャリブレーション前）なら表示領域の全体。
+ */
+export function referenceRect(view: Size, aspect?: number | null): Rect {
+  if (!aspect || !Number.isFinite(aspect) || aspect <= 0 || view.width <= 0 || view.height <= 0) {
+    return { x: 0, y: 0, width: view.width, height: view.height };
+  }
+  const width = Math.min(view.width, view.height * aspect);
+  const height = width / aspect;
+  return { x: (view.width - width) / 2, y: (view.height - height) / 2, width, height };
+}
+
+export function layoutToRects(layout: GuideLayout, view: Size, aspect?: number | null): GuideRects {
+  const ref = referenceRect(view, aspect);
   const px = (n: NormRect): Rect => ({
-    x: n.x * view.width,
-    y: n.y * view.height,
-    width: n.width * view.width,
-    height: n.height * view.height,
+    x: ref.x + n.x * ref.width,
+    y: ref.y + n.y * ref.height,
+    width: n.width * ref.width,
+    height: n.height * ref.height,
   });
   return { score: px(layout.score), title: px(layout.title), judge: px(layout.judge) };
 }
 
-export function guideRects(side: PlaySide, view: Size, custom?: CustomGuides): GuideRects {
-  return layoutToRects(resolveLayout(side, custom), view);
+export function guideRects(view: Size, layout?: GuideLayout | null, aspect?: number | null): GuideRects {
+  return layoutToRects(resolveLayout(layout), view, aspect);
 }

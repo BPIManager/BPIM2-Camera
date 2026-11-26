@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import Button from "@/components/ui/button";
 import type { Size } from "@/lib/vision/framing";
 import { resolveLayout } from "@/lib/vision/guides";
+import AccountSection from "./AccountSection";
 import GuideEditor from "./GuideEditor";
 import Label from "@/components/ui/label";
-import { RadioGroup, RadioItem } from "@/components/ui/radio-group";
+import SyncTargetPicker from "@/components/sync-target-picker";
 import Switch from "@/components/ui/switch";
-import type { PlaySide } from "@/lib/storage/settings";
 import { clearHistory } from "@/lib/storage/history";
 import { clearSamples, countSamples, listSamples } from "@/lib/storage/samples";
 import { buildTrainingZip } from "@/lib/training/exportZip";
@@ -16,6 +16,9 @@ interface Props {
   settings: Settings;
   update: (patch: Partial<Settings>) => void;
   viewSize: Size;
+  /** アプリとして追加できる（まだアプリとして開いていない）か */
+  installable: boolean;
+  onOpenInstall: () => void;
 }
 
 function Row({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
@@ -30,7 +33,7 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint?: 
   );
 }
 
-export default function SettingsView({ settings, update, viewSize }: Props) {
+export default function SettingsView({ settings, update, viewSize, installable, onOpenInstall }: Props) {
   const [editingGuides, setEditingGuides] = useState(false);
   const [sampleCount, setSampleCount] = useState(0);
   useEffect(() => {
@@ -38,18 +41,22 @@ export default function SettingsView({ settings, update, viewSize }: Props) {
   }, []);
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 pb-8">
-      <div className="flex flex-col gap-2 border-b border-border py-3">
-        <Label>プレーする側</Label>
-        <p className="text-xs text-muted-foreground">リザルト画面は 1P と 2P で左右が反転します</p>
-        <RadioGroup value={settings.playSide} onValueChange={(v) => update({ playSide: v as PlaySide })} aria-label="プレーする側">
-          <RadioItem value="1P">1P</RadioItem>
-          <RadioItem value="2P">2P</RadioItem>
-        </RadioGroup>
-      </div>
+      <AccountSection />
+      {installable && (
+        <div className="flex items-center justify-between gap-4 border-b border-border py-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <Label>ホーム画面に追加</Label>
+            <p className="text-xs text-muted-foreground">アプリとして開くと、全画面で撮影でき、カメラの許可確認も減ります</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={onOpenInstall}>
+            方法を見る
+          </Button>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-4 border-b border-border py-3">
         <div className="flex min-w-0 flex-col gap-1">
           <Label>撮影枠の位置</Label>
-          <p className="text-xs text-muted-foreground">好きなリザルト画像を背景に、スコアと曲名の枠を合わせます</p>
+          <p className="text-xs text-muted-foreground">好きなリザルト画像を背景に、スコア・曲名・判定の枠を合わせます</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setEditingGuides(true)}>
           調整
@@ -57,17 +64,22 @@ export default function SettingsView({ settings, update, viewSize }: Props) {
       </div>
       {editingGuides && (
         <GuideEditor
-          side={settings.playSide}
-          initial={resolveLayout(settings.playSide, settings.guides)}
+          initial={resolveLayout(settings.layout)}
+          initialAspect={settings.layoutAspect}
           viewSize={viewSize}
           onClose={() => setEditingGuides(false)}
-          onSave={(layout) => {
-            update({ guides: { ...settings.guides, [settings.playSide]: layout } });
+          onSave={(layout, layoutAspect) => {
+            update({ layout, layoutAspect });
             setEditingGuides(false);
           }}
         />
       )}
-      <Row id="auto" label="自動撮影" hint="静止して画面が読めたら自動で読み取ります">
+      <div className="flex flex-col gap-2 border-b border-border py-3">
+        <Label>BPIM2 の同期先（既定）</Label>
+        <p className="text-xs text-muted-foreground">結果画面の「BPIM2同期」で保存する先です。結果画面では、1 件ごとに変えられます</p>
+        <SyncTargetPicker value={settings.syncTarget} onChange={(syncTarget) => update({ syncTarget })} />
+      </div>
+      <Row id="auto" label="自動撮影" hint="枠に画面を合わせて静止すると、自動で読み取ります">
         <Switch id="auto" checked={settings.autoCapture} onCheckedChange={(v) => update({ autoCapture: v })} />
       </Row>
       <Row id="save" label="カメラロールへの保存" hint="iOS は共有シートで「画像を保存」を選びます">
@@ -90,9 +102,6 @@ export default function SettingsView({ settings, update, viewSize }: Props) {
           checked={settings.statsIncludeImage}
           onCheckedChange={(v) => update({ statsIncludeImage: v })}
         />
-      </Row>
-      <Row id="bpim2" label="BPIM2へのスコア登録" hint="BPIM2 ログイン後に使えます（準備中）">
-        <Switch id="bpim2" disabled checked={settings.registerToBpim2} onCheckedChange={(v) => update({ registerToBpim2: v })} />
       </Row>
       <div className="flex flex-col gap-2 border-b border-border py-3">
         <Label>学習データ</Label>

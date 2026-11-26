@@ -35,7 +35,7 @@ describe("fetchBpi", () => {
     const ok = (notes: number) =>
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ song: { title: "UNDO THE NIGHT", notes }, bpi: 61.5, rank: { estimatedRank: 120 } }),
+        json: async () => ({ error: false, body: { song: { title: "UNDO THE NIGHT", notes }, bpi: 61.5, rank: { estimatedRank: 120 } } }),
       });
     expect(await fetchBpi({ chart, exScore: 3365, version: "33", fetchImpl: ok(1774) })).toEqual({
       status: "calculated",
@@ -43,6 +43,28 @@ describe("fetchBpi", () => {
       estimatedRank: 120,
     });
     expect((await fetchBpi({ chart, exScore: 3365, version: "33", fetchImpl: ok(1700) })).status).toBe("error");
+  });
+
+  it("v2 のエンベロープから、曲線とアリーナ平均も取り出す", async () => {
+    const chart = { ...record().chart, level: 12, notes: 1774, title: "UNDO THE NIGHT" };
+    const curve = [{ bpi: 100, score: 3000 }, { bpi: 0, score: 2400 }];
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        error: false,
+        body: { song: { title: "UNDO THE NIGHT", notes: 1774 }, bpi: 10, rank: { estimatedRank: 5 }, curve, metadata: { arenaAverages: { A1: { avgExScore: 2900 } } } },
+      }),
+    });
+    const out = await fetchBpi({ chart, exScore: 2500, version: "34", fetchImpl });
+    expect(out.curve).toEqual(curve);
+    expect(out.arenaAverages).toEqual({ A1: { avgExScore: 2900 } });
+    expect(String(fetchImpl.mock.calls[0][0])).toContain("includeCurve=true");
+  });
+
+  it("エンベロープが error のときは error", async () => {
+    const chart = { ...record().chart, level: 12 };
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ error: true, errorMessage: "x", body: null }) });
+    expect((await fetchBpi({ chart, exScore: 1, version: "34", fetchImpl })).status).toBe("error");
   });
 
   it("通信失敗は pending（復帰後に再計算）", async () => {
@@ -84,17 +106,25 @@ describe("matchChart", () => {
 });
 
 describe("buildShareText", () => {
-  it("☆10 は BPI 行を出さずにシェア本文を作れる", () => {
-    const text = buildShareText(record({ bestExScore: 0 }));
-    expect(text).toContain("HEARTACHE [SPA☆10]");
-    expect(text).toContain("EX 1796（更新 +1796） AAA");
-    expect(text).not.toMatch(/^BPI /m);
-    expect(text).toContain("FULLCOMBO / BP 0");
-    expect(text).toContain("PG 867 / GR 62 / GD 1 / BD 0 / PR 0");
+  it("☆12 楽曲名[SPA] / EX: nnnn (MAX-nnn) / BPI: nn.nn / 推定順位: nn位 の 2 行", () => {
+    const r = record({
+      chart: { ...record().chart, title: "UNDO THE NIGHT", level: 12, notes: 1000, difficulty: "ANOTHER", playStyle: "SP" },
+      exScore: 1950,
+      bpi: 55.123,
+      bpiStatus: "calculated",
+      estimatedRank: 120,
+    });
+    expect(buildShareText(r)).toBe("☆12 UNDO THE NIGHT[SPA]\nEX: 1950 (MAX-50) / BPI: 55.12 / 推定順位: 120位");
   });
 
-  it("算出済みなら BPI 行を載せる", () => {
-    const text = buildShareText(record({ bpi: 55.123, bpiStatus: "calculated" }));
-    expect(text).toContain("BPI 55.12");
+  it("BPI や推定順位が出せないときは、その項目を省く（☆10 以下は BPI 算出対象外）", () => {
+    const r = record({ exScore: 1796, bpi: null, bpiStatus: "unsupported-level", estimatedRank: null });
+    expect(buildShareText(r)).toBe("☆10 HEARTACHE[SPA]\nEX: 1796 (MAX-64)");
+  });
+
+  it("AAA 未満は、現在のランクからの超過と次のランクまでの距離（A+n / AA-nnn）で表す", () => {
+    const r = record({ exScore: 1500, bpi: null, bpiStatus: "unsupported-level" });
+    // 満点 1860（930 ノーツ）の AA 帯: AA 境界 1447 からの超過 53、AAA 境界 1654 までの距離 154
+    expect(buildShareText(r)).toContain("EX: 1500 (AA+53 / AAA-154)");
   });
 });

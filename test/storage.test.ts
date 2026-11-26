@@ -41,38 +41,37 @@ describe("settings", () => {
   });
 });
 
-describe("settings の枠調整", () => {
+describe("settings のキャリブレーション", () => {
   const mem = (value: unknown) => {
     const m = new Map<string, string>([["bpim2-camera:settings", JSON.stringify(value)]]);
     return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
   };
   const ok = { x: 0.1, y: 0.1, width: 0.2, height: 0.1 };
 
-  it("正しい枠は読み込み、壊れた枠だけを捨てる（その枠は既定値になる）", () => {
-    const s = loadSettings(mem({ guides: { "1P": { score: ok, title: ok }, "2P": { score: ok, title: { x: 2, y: 0, width: 1, height: 1 } } } }));
-    expect(s.guides["1P"]).toBeDefined();
-    expect(s.guides["2P"]).toEqual({ score: ok });
+  it("3 枠すべてが正しければ読み込み、壊れていれば null（既定値）に戻す", () => {
+    expect(loadSettings(mem({ layout: { score: ok, title: ok, judge: ok } })).layout).toEqual({ score: ok, title: ok, judge: ok });
+    expect(loadSettings(mem({ layout: { score: ok, title: ok, judge: { x: 2, y: 0, width: 1, height: 1 } } })).layout).toBeNull();
+    expect(loadSettings(mem({ autoCapture: false })).layout).toBeNull();
   });
 
-  it("枠の項目がない古い保存値でも既定値で動く", () => {
-    expect(loadSettings(mem({ autoCapture: false })).guides).toEqual({});
-  });
-});
-
-describe("settings の枠（4 枠化後）", () => {
-  const mem = (value: unknown) => {
-    const m = new Map<string, string>([["bpim2-camera:settings", JSON.stringify(value)]]);
-    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
-  };
-  const ok = { x: 0.1, y: 0.1, width: 0.2, height: 0.1 };
-
-  it("スコアと曲名だけの古い保存値でも読み込める（足りない枠は既定値）", () => {
-    const s = loadSettings(mem({ guides: { "1P": { score: ok, title: ok } } }));
-    expect(s.guides["1P"]).toEqual({ score: ok, title: ok });
+  it("写真の縦横比は、枠があり妥当なときだけ読み込む（なければ null で、表示領域全体への割合として扱う）", () => {
+    const layout = { score: ok, title: ok, judge: ok };
+    expect(loadSettings(mem({ layout, layoutAspect: 1.5 })).layoutAspect).toBe(1.5);
+    expect(loadSettings(mem({ layout, layoutAspect: 0 })).layoutAspect).toBeNull();
+    expect(loadSettings(mem({ layout })).layoutAspect).toBeNull();
+    expect(loadSettings(mem({ layoutAspect: 1.5 })).layoutAspect).toBeNull();
   });
 
-  it("壊れた枠だけを捨て、有効な枠は残す", () => {
+  it("旧版の保存値（プレーサイドと 1P/2P 別の枠）から、プレー側の枠を引き継ぐ", () => {
+    const s = loadSettings(mem({ playSide: "2P", guides: { "2P": { score: ok, title: ok } } }));
+    expect(s.layout?.score).toEqual(ok);
+    expect(s.layout?.title).toEqual(ok);
+    expect(s).not.toHaveProperty("playSide");
+    expect(s).not.toHaveProperty("guides");
+  });
+
+  it("旧版で壊れた枠だけは捨てて既定値で補う", () => {
     const s = loadSettings(mem({ guides: { "1P": { score: ok, judge: { x: 2, y: 0, width: 1, height: 1 } } } }));
-    expect(s.guides["1P"]).toEqual({ score: ok });
+    expect(s.layout?.score).toEqual(ok);
   });
 });

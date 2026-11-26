@@ -72,6 +72,8 @@ export class TesseractRecognizer implements Recognizer {
   }
 
   async recognize(input: RecognizeInput): Promise<RawResult | null> {
+    input.signal?.throwIfAborted();
+    input.onStage?.(input.regions ? "文字を読んでいます" : "画像全体を読んでいます");
     return input.regions ? this.recognizeRegions(input.regions) : this.recognizeFull(input.full);
   }
 

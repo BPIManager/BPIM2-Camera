@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isValidRect, MIN_SIZE, moveRect, resizeRect } from "@/lib/vision/guideEdit";
-import { GUIDE_KEYS, GUIDE_LAYOUTS, mirrorLayout, resolveLayout } from "@/lib/vision/guides";
+import { GUIDE_KEYS, GUIDE_LAYOUTS, inferSide, migrateLegacyLayout, mirrorLayout, resolveLayout } from "@/lib/vision/guides";
 
 const r = { x: 0.3, y: 0.4, width: 0.2, height: 0.1 };
 
@@ -52,18 +52,30 @@ describe("resolveLayout", () => {
   const rect = (x: number) => ({ x, y: 0.1, width: 0.2, height: 0.1 });
   const full = { score: rect(0.1), title: rect(0.5), judge: rect(0.2) };
 
-  it("調整済みならそれを使い、なければ既定値", () => {
-    expect(resolveLayout("1P", { "1P": full })).toEqual(full);
-    expect(resolveLayout("2P", undefined)).toEqual(GUIDE_LAYOUTS["2P"]);
+  it("キャリブレーション済みならそれを使い、なければ既定値（1P）", () => {
+    expect(resolveLayout(full)).toEqual(full);
+    expect(resolveLayout(null)).toEqual(GUIDE_LAYOUTS["1P"]);
   });
 
-  it("反対側だけ調整済みなら左右反転して使う", () => {
-    expect(resolveLayout("2P", { "1P": full })).toEqual(mirrorLayout(full));
+  it("スコア枠が左にあれば 1P、右にあれば 2P と推定する", () => {
+    expect(inferSide(GUIDE_LAYOUTS["1P"])).toBe("1P");
+    expect(inferSide(GUIDE_LAYOUTS["2P"])).toBe("2P");
+  });
+});
+
+describe("migrateLegacyLayout", () => {
+  const rect = (x: number) => ({ x, y: 0.1, width: 0.2, height: 0.1 });
+  const full = { score: rect(0.1), title: rect(0.5), judge: rect(0.2) };
+
+  it("プレー側の調整があればそれを使い、反対側だけなら左右反転、なければ null", () => {
+    expect(migrateLegacyLayout("1P", { "1P": full })).toEqual(full);
+    expect(migrateLegacyLayout("2P", { "1P": full })).toEqual(mirrorLayout(full));
+    expect(migrateLegacyLayout("1P", {})).toBeNull();
   });
 
   it("古い設定（スコアと曲名だけ）でも、足りない枠は既定値で補う", () => {
     const old = { score: rect(0.1), title: rect(0.5) };
-    const r = resolveLayout("1P", { "1P": old });
+    const r = migrateLegacyLayout("1P", { "1P": old })!;
     expect(r.score).toEqual(old.score);
     expect(r.judge).toEqual(GUIDE_LAYOUTS["1P"].judge);
   });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { chartResolvedByHints, rawFromRegions } from "@/lib/recognition/fromRegions";
 import { resolveResult } from "@/lib/recognition/resolve";
 import { voteScore } from "@/lib/recognition/scoreVote";
-import { GUIDE_LAYOUTS, guideRects } from "@/lib/vision/guides";
+import { GUIDE_LAYOUTS, guideRects, referenceRect } from "@/lib/vision/guides";
 import type { OcrToken } from "@/lib/recognition/tokens";
 import { master } from "./fixtures";
 
@@ -42,13 +42,46 @@ describe("rawFromRegions", () => {
 });
 
 describe("guideRects", () => {
-  it("2P は 1P を左右反転した位置になる", () => {
+  it("キャリブレーション済みの配置を、表示領域の大きさに合わせた座標にする。未設定なら 1P の既定値", () => {
     const view = { width: 1000, height: 2000 };
-    const a = guideRects("1P", view);
-    const b = guideRects("2P", view);
+    const a = guideRects(view);
+    const b = guideRects(view, GUIDE_LAYOUTS["2P"]);
     expect(b.score.x).toBeCloseTo(1000 - a.score.x - a.score.width);
     expect(b.title.y).toBeCloseTo(a.title.y);
     expect(GUIDE_LAYOUTS["1P"].title.x + GUIDE_LAYOUTS["1P"].title.width).toBeCloseTo(1);
+  });
+});
+
+describe("基準にした写真の縦横比", () => {
+  const view = { width: 1000, height: 2000 };
+
+  it("縦横比がなければ表示領域の全体。あれば、その縦横比で収まる最大の矩形を中央に置く", () => {
+    expect(referenceRect(view)).toEqual({ x: 0, y: 0, width: 1000, height: 2000 });
+    // 横長（16:9）の写真は、幅いっぱいで上下に余白ができる
+    const wide = referenceRect(view, 16 / 9);
+    expect(wide.width).toBeCloseTo(1000);
+    expect(wide.height).toBeCloseTo(562.5);
+    expect(wide.y).toBeCloseTo((2000 - 562.5) / 2);
+    // 表示領域より縦長の写真は、高さいっぱいで左右に余白ができる
+    const tall = referenceRect(view, 1 / 4);
+    expect(tall.height).toBeCloseTo(2000);
+    expect(tall.width).toBeCloseTo(500);
+    expect(tall.x).toBeCloseTo(250);
+  });
+
+  it("枠は写真に対する割合なので、写真とカメラの縦横比が違っても、写真の中での位置関係が変わらない", () => {
+    const layout = GUIDE_LAYOUTS["1P"];
+    const aspect = 4 / 3;
+    const ref = referenceRect(view, aspect);
+    const r = guideRects(view, layout, aspect);
+    expect((r.score.x - ref.x) / ref.width).toBeCloseTo(layout.score.x);
+    expect((r.score.y - ref.y) / ref.height).toBeCloseTo(layout.score.y);
+    expect(r.score.width / ref.width).toBeCloseTo(layout.score.width);
+    expect(r.score.height / ref.height).toBeCloseTo(layout.score.height);
+    // 別の縦横比のカメラでも、写真と同じ縦横比の範囲に対して同じ割合になる
+    const ref2 = referenceRect({ width: 1600, height: 900 }, aspect);
+    const r2 = guideRects({ width: 1600, height: 900 }, layout, aspect);
+    expect(r2.score.width / ref2.width).toBeCloseTo(layout.score.width);
   });
 });
 

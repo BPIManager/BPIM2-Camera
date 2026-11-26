@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Toaster } from "sonner";
 import { Camera, History, Settings as SettingsIcon } from "lucide-react";
 import CameraView from "@/features/camera/CameraView";
 import HistoryView from "@/features/history/HistoryView";
+import InstallDialog from "@/features/install/InstallDialog";
 import Onboarding from "@/features/onboarding/Onboarding";
 import type { Draft } from "@/features/result/draft";
 import ResultDrawer from "@/features/result/ResultDrawer";
 import SettingsView from "@/features/settings/SettingsView";
 import { useMaster } from "@/hooks/useMaster";
+import { isIos, isStandalone, useInstallMode } from "@/lib/pwa/install";
 import { useSettings } from "@/hooks/useSettings";
 import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
 import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
 import { WorkerOcrEngine } from "@/lib/recognition/paddle/workerEngine";
+import { isAbortError, raceAbort } from "@/lib/async/abort";
 import { logDebug, saveCaptures } from "@/lib/debug/ocrLog";
-import type { Recognizer } from "@/lib/recognition/recognizer";
+import type { Recognizer, SongProgress } from "@/lib/recognition/recognizer";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { resolveResult } from "@/lib/recognition/resolve";
 import type { GuideKey } from "@/lib/vision/guides";
@@ -26,15 +30,30 @@ const TABS = [
   { id: "settings", label: "設定", Icon: SettingsIcon },
 ] as const;
 
-const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
-const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
+/** 撮影以外のタブは、タブ名のヘッダーを付ける（撮影はカメラ映像を全面に使う） */
+const HEADED_TABS: readonly Tab[] = ["history", "settings"];
+
+const ios = isIos();
+const standalone = isStandalone();
 
 export default function App() {
   const { settings, update } = useSettings();
   const { songs } = useMaster();
   const [tab, setTab] = useState<Tab>("camera");
   const [draft, setDraft] = useState<Draft | null>(null);
+  // アプリとして追加する案内。アプリとして開いていないときは、ページを開くたびに自動で出す（追加できる端末のときだけ）。
+  // 「あとで」で閉じたら、そのページを開いている間は出さない（開き直すと、また出る）。設定からも開ける
+  const installMode = useInstallMode();
+  const [installOpen, setInstallOpen] = useState(false);
+  const [installDismissed, setInstallDismissed] = useState(false);
+  const autoInstall = settings.onboarded && !installDismissed && (installMode === "native" || installMode === "ios");
   const [busy, setBusy] = useState(false);
+  /** 読み取りの中止用。読み取り中だけ入っている */
+  const abortRef = useRef<AbortController | null>(null);
+  /** 読み取り中の段階。画面に出す */
+  const [stage, setStage] = useState<string | null>(null);
+  /** 読み取りの途中でわかった、曲の確定状況。画面に出す */
+  const [song, setSong] = useState<SongProgress | null>(null);
   // カメラ表示領域の大きさ。設定の枠調整が同じ縦横比で表示するために保持する
   const [viewSize, setViewSize] = useState({ width: window.innerWidth, height: Math.max(200, window.innerHeight - 170) });
   const onViewSize = useCallback((s: { width: number; height: number }) => s.width > 0 && setViewSize(s), []);
@@ -55,16 +74,17 @@ export default function App() {
 
   if (!settings.onboarded) {
     return (
-      <Onboarding
-        ios={isIos}
-        standalone={isStandalone}
-        onDone={({ statsConsent, playSide }) => update({ onboarded: true, statsConsent, playSide })}
-      />
+      <Onboarding settings={settings} update={update} viewSize={viewSize} ios={ios} standalone={standalone} />
     );
   }
 
   const handleCapture = async (image: Blob, source: "camera" | "import", regions?: Record<GuideKey, Blob>) => {
     setBusy(true);
+    setStage("画像を準備しています");
+    setSong(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let cancelled = false;
     let raw = null;
     try {
       const full = await createImageBitmap(image);
@@ -78,16 +98,31 @@ export default function App() {
       const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
       saveCaptures(stamp, { full: image, ...(regions ?? {}) });
       logDebug(`撮影（保存: internal/captures/${stamp}_*）: ${source} / 枠で切り出し: ${crops ? "あり" : "なし"} / 分離ページ: ${self.crossOriginIsolated}`);
-      raw = await recognizerRef.current!.recognize({ full, regions: crops }).catch((e: unknown) => {
+      // 画像は、読み取りが（中止後に遅れて）終わるまで閉じない
+      const task = recognizerRef.current!
+        .recognize({ full, regions: crops, onStage: setStage, onSong: setSong, signal: controller.signal })
+        .finally(() => {
+          full.close();
+          if (crops) for (const b of Object.values(crops)) b.close();
+        });
+      raw = await raceAbort(task, controller.signal).catch((e: unknown) => {
+        if (isAbortError(e)) {
+          cancelled = true;
+          logDebug("読み取りを中止");
+          return null;
+        }
         logDebug("読み取りに失敗: " + (e instanceof Error ? e.stack ?? e.message : String(e)));
         return null;
       });
-      if (!raw) logDebug("読み取り結果なし（何も読めなかった）");
-      full.close();
-      if (crops) for (const b of Object.values(crops)) b.close();
+      if (!raw && !cancelled) logDebug("読み取り結果なし（何も読めなかった）");
     } finally {
       setBusy(false);
+      setStage(null);
+      setSong(null);
+      abortRef.current = null;
     }
+    // 中止したときは、結果の画面を出さず、撮影に戻る
+    if (cancelled) return;
     setDraft({
       id: crypto.randomUUID(),
       image,
@@ -100,10 +135,15 @@ export default function App() {
 
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col">
+      {HEADED_TABS.includes(tab) && (
+        <header className="border-b border-border pt-[env(safe-area-inset-top)]">
+          <h1 className="flex h-12 items-center px-4 text-base font-semibold">{TABS.find((t) => t.id === tab)?.label}</h1>
+        </header>
+      )}
       <main className="min-h-0 flex-1">
-        {tab === "camera" && <CameraView active={draft === null} busy={busy} side={settings.playSide} guides={settings.guides} onViewSize={onViewSize} onCapture={handleCapture} />}
+        {tab === "camera" && <CameraView active={draft === null} busy={busy} stage={stage} song={song} layout={settings.layout} layoutAspect={settings.layoutAspect} onViewSize={onViewSize} onCapture={handleCapture} onCancel={() => abortRef.current?.abort()} autoCapture={settings.autoCapture} />}
         {tab === "history" && <HistoryView active />}
-        {tab === "settings" && <SettingsView settings={settings} update={update} viewSize={viewSize} />}
+        {tab === "settings" && <SettingsView settings={settings} update={update} viewSize={viewSize} installable={installMode !== "installed"} onOpenInstall={() => setInstallOpen(true)} />}
       </main>
       <nav className="grid grid-cols-3 border-t border-border pb-[env(safe-area-inset-bottom)]">
         {TABS.map(({ id, label, Icon }) => (
@@ -122,6 +162,16 @@ export default function App() {
           </button>
         ))}
       </nav>
+      <Toaster position="top-center" theme="dark" offset="calc(env(safe-area-inset-top) + 0.75rem)" toastOptions={{ classNames: { toast: "!border-border !bg-card !text-foreground", description: "!text-muted-foreground" } }} />
+      {(autoInstall || installOpen) && (
+        <InstallDialog
+          mode={installMode}
+          onClose={() => {
+            setInstallOpen(false);
+            setInstallDismissed(true);
+          }}
+        />
+      )}
       {draft && <ResultDrawer key={draft.id} draft={draft} songs={songs} settings={settings} onClose={() => setDraft(null)} />}
     </div>
   );

@@ -4,15 +4,24 @@ import Button from "@/components/ui/button";
 import type { Size } from "@/lib/vision/framing";
 import { moveRect, resizeRect, type Corner } from "@/lib/vision/guideEdit";
 import { GUIDE_KEYS, GUIDE_LABELS, GUIDE_LAYOUTS, type GuideKey, type GuideLayout } from "@/lib/vision/guides";
-import type { PlaySide } from "@/lib/storage/settings";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  side: PlaySide;
   initial: GuideLayout;
+  /** 枠の基準にしている写真の縦横比。なければカメラ表示領域と同じ */
+  initialAspect?: number | null;
+  /** 見出し。既定は「枠の位置」 */
+  title?: string;
+  /** 閉じるボタンの文言。既定は「キャンセル」 */
+  closeLabel?: string;
+  /** 保存ボタンの文言。既定は「保存」 */
+  saveLabel?: string;
+  /** true なら、背景の画像を選ぶまで保存できない（キャリブレーションには画像が要る） */
+  requireImage?: boolean;
   /** カメラ表示領域の大きさ。同じ縦横比で表示し、保存する割合をカメラと一致させる */
   viewSize: Size;
-  onSave: (layout: GuideLayout) => void;
+  /** 保存する枠と、その基準にした写真の縦横比（幅 / 高さ） */
+  onSave: (layout: GuideLayout, aspect: number | null) => void;
   onClose: () => void;
 }
 
@@ -26,10 +35,13 @@ const CORNERS: { corner: Corner; pos: string }[] = [
 type Drag = { key: GuideKey; mode: "move" | Corner; x: number; y: number; start: GuideLayout[GuideKey] };
 
 /** 背景に好きなリザルト画像を置き、2 つの枠をドラッグ・四隅で拡大縮小して位置を決める */
-export default function GuideEditor({ side, initial, viewSize, onSave, onClose }: Props) {
+export default function GuideEditor({ initial, title = "枠の位置", closeLabel = "キャンセル", saveLabel = "保存", requireImage = false, initialAspect = null, viewSize, onSave, onClose }: Props) {
   const [layout, setLayout] = useState<GuideLayout>(initial);
   const [selected, setSelected] = useState<GuideKey>("score");
   const [bg, setBg] = useState<string | null>(null);
+  // 枠は写真に対する割合で持つ。写真を選んだらその縦横比、なければ保存済みの縦横比、なければ表示領域と同じ
+  const [aspect, setAspect] = useState<number | null>(initialAspect);
+  const boxAspect = aspect ?? viewSize.width / viewSize.height;
   const [box, setBox] = useState<Size>({ width: 0, height: 0 });
   const areaRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,14 +52,14 @@ export default function GuideEditor({ side, initial, viewSize, onSave, onClose }
     const el = areaRef.current;
     if (!el) return;
     const fit = () => {
-      const k = Math.min(el.clientWidth / viewSize.width, el.clientHeight / viewSize.height);
-      setBox({ width: Math.floor(viewSize.width * k), height: Math.floor(viewSize.height * k) });
+      const width = Math.min(el.clientWidth, el.clientHeight * boxAspect);
+      setBox({ width: Math.floor(width), height: Math.floor(width / boxAspect) });
     };
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     fit();
     return () => ro.disconnect();
-  }, [viewSize.width, viewSize.height]);
+  }, [boxAspect]);
 
   useEffect(
     () => () => {
@@ -75,12 +87,12 @@ export default function GuideEditor({ side, initial, viewSize, onSave, onClose }
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       <header className="flex items-center justify-between gap-2 border-b border-border p-3">
-        <h2 className="font-medium">枠の位置（{side}）</h2>
+        <h2 className="font-medium">{title}</h2>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()}>
             <ImagePlus /> 画像
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setLayout(GUIDE_LAYOUTS[side])}>
+          <Button variant="ghost" size="sm" onClick={() => setLayout(GUIDE_LAYOUTS["1P"])}>
             <RotateCcw /> 初期位置
           </Button>
         </div>
@@ -95,7 +107,16 @@ export default function GuideEditor({ side, initial, viewSize, onSave, onClose }
           onPointerCancel={() => (drag.current = null)}
         >
           {bg ? (
-            <img src={bg} alt="" className="size-full object-cover" draggable={false} />
+            <img
+              src={bg}
+              alt=""
+              className="size-full"
+              draggable={false}
+              onLoad={(e) => {
+                const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+                if (w > 0 && h > 0) setAspect(w / h);
+              }}
+            />
           ) : (
             <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
               「画像」から、リザルト画面の写真を選ぶと、背景に表示されます
@@ -128,9 +149,11 @@ export default function GuideEditor({ side, initial, viewSize, onSave, onClose }
 
       <footer className="grid grid-cols-2 gap-2 border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <Button variant="secondary" onClick={onClose}>
-          キャンセル
+          {closeLabel}
         </Button>
-        <Button onClick={() => onSave(layout)}>保存</Button>
+        <Button disabled={requireImage && !bg} onClick={() => onSave(layout, aspect)}>
+          {saveLabel}
+        </Button>
       </footer>
 
       <input

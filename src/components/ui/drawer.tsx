@@ -21,7 +21,6 @@ export function DrawerContent({ className, children, style, ...props }: React.Co
         style={{ bottom: "var(--kb-inset, 0px)", maxHeight: "calc(var(--vv-height, 100dvh) - 0.5rem)", ...style }}
         {...props}
       >
-        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border" />
         {children}
       </DrawerPrimitive.Content>
     </DrawerPrimitive.Portal>

@@ -25,6 +25,19 @@
   --input: oklch(0.32 0.01 255);
   --ring: oklch(0.86 0.15 195);
   --guide: oklch(0.98 0.01 255);
+  --brand-google: oklch(0.98 0 0);
+  --brand-google-foreground: oklch(0.25 0 0);
+  --brand-x: oklch(0.1 0 0);
+  --brand-x-foreground: oklch(0.98 0 0);
+  --brand-line: oklch(0.72 0.19 150);
+  --brand-line-foreground: oklch(0.99 0 0);
+  /* BPIM2 のロゴの青（hsl 217 91% 60%） */
+  --brand-bpim: oklch(0.65 0.19 255);
+  --diff-beginner: oklch(0.8 0.17 150);
+  --diff-normal: oklch(0.74 0.13 250);
+  --diff-hyper: oklch(0.85 0.16 90);
+  --diff-another: oklch(0.7 0.19 25);
+  --diff-leggendaria: oklch(0.72 0.17 310);
   --scrim: oklch(0 0 0 / 0.6);
   --radius: 0.625rem;
 }
@@ -51,6 +64,18 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-guide: var(--guide);
+  --color-brand-google: var(--brand-google);
+  --color-brand-google-foreground: var(--brand-google-foreground);
+  --color-brand-x: var(--brand-x);
+  --color-brand-x-foreground: var(--brand-x-foreground);
+  --color-brand-line: var(--brand-line);
+  --color-brand-line-foreground: var(--brand-line-foreground);
+  --color-brand-bpim: var(--brand-bpim);
+  --color-diff-beginner: var(--diff-beginner);
+  --color-diff-normal: var(--diff-normal);
+  --color-diff-hyper: var(--diff-hyper);
+  --color-diff-another: var(--diff-another);
+  --color-diff-leggendaria: var(--diff-leggendaria);
   --color-scrim: var(--scrim);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -67,6 +92,8 @@
     font-family: var(--font-sans);
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
+    /* ピンチやダブルタップでの拡大縮小を止める（スクロールはできる）。ズームはカメラ自体で行う */
+    touch-action: pan-x pan-y;
   }
   ::selection {
     background: var(--primary);
@@ -93,4 +120,303 @@
       transition-duration: 0.01ms !important;
     }
   }
+}
+
+/* 読み取り中の演出（ScanOverlay）。動きを減らす設定では、上の規則でほぼ止まる */
+@keyframes scan-sweep {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(200%);
+    opacity: 0;
+  }
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    transform: scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1) rotate(45deg);
+    opacity: 1;
+  }
+}
+
+@keyframes frame-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 16px 2px color-mix(in oklch, var(--primary) 55%, transparent);
+  }
+}
+
+.scan-frame {
+  animation: frame-glow 1.8s ease-in-out infinite;
+}
+
+.scan-line {
+  background: linear-gradient(to bottom, transparent, color-mix(in oklch, var(--primary) 45%, transparent), transparent);
+  animation: scan-sweep 1.6s ease-in-out infinite;
+}
+
+.sparkle {
+  filter: drop-shadow(0 0 4px var(--primary));
+  transform: scale(0);
+  animation: twinkle ease-in-out infinite;
+}
+
+/* インストール案内（InstallDialog）。動きを減らす設定では、上の規則でほぼ止まる */
+@keyframes install-drop {
+  0% {
+    transform: translateY(-70px) scale(0.7);
+    opacity: 0;
+  }
+  25% {
+    transform: translateY(0) scale(1.12);
+    opacity: 1;
+  }
+  35% {
+    transform: translateY(0) scale(0.95);
+  }
+  45%,
+  85% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes install-ring {
+  0%,
+  24% {
+    transform: scale(1);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.9;
+  }
+  70%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes install-step {
+  0%,
+  30%,
+  100% {
+    border-color: var(--border);
+    background-color: transparent;
+  }
+  5%,
+  25% {
+    border-color: var(--primary);
+    background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  }
+}
+
+.install-drop {
+  animation: install-drop 3s ease-out infinite;
+}
+
+.install-ring {
+  opacity: 0;
+  animation: install-ring 3s ease-out infinite;
+}
+
+.install-step {
+  animation: install-step 6s ease-in-out infinite;
+}
+
+/* オンボーディングの説明アニメーション（StepAnimations）。動きを減らす設定では、上の規則でほぼ止まる */
+@keyframes calib-frame {
+  0%,
+  10% {
+    transform: translate(var(--dx), var(--dy)) scale(var(--s));
+    border-color: var(--guide);
+    opacity: 1;
+  }
+  45%,
+  88% {
+    transform: translate(0, 0) scale(1);
+    border-color: var(--primary);
+    opacity: 1;
+  }
+  96% {
+    transform: translate(0, 0) scale(1);
+    border-color: var(--primary);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(var(--s));
+    opacity: 0;
+  }
+}
+
+@keyframes calib-finger {
+  0%,
+  6% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  12%,
+  42% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes align-screen {
+  0%,
+  10% {
+    transform: translate(var(--ax), var(--ay)) scale(0.84) rotate(5deg);
+    opacity: 0.85;
+  }
+  42%,
+  88% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  96%,
+  100% {
+    transform: translate(var(--ax), var(--ay)) scale(0.84) rotate(5deg);
+    opacity: 0;
+  }
+}
+
+@keyframes align-frame {
+  0%,
+  38% {
+    border-color: var(--guide);
+  }
+  46%,
+  88% {
+    border-color: var(--success);
+  }
+  100% {
+    border-color: var(--guide);
+  }
+}
+
+@keyframes align-ok {
+  0%,
+  40% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  48% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+  54%,
+  88% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  96%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+}
+
+.calib-frame {
+  animation: calib-frame 5s ease-in-out infinite;
+}
+
+.calib-finger {
+  animation: calib-finger 5s ease-in-out infinite;
+}
+
+.align-screen {
+  animation: align-screen 5s ease-in-out infinite;
+}
+
+.align-frame {
+  animation: align-frame 5s ease-in-out infinite;
+}
+
+.align-ok {
+  transform: scale(0);
+  animation: align-ok 5s ease-in-out infinite;
+}
+
+/* ズームのスライダー（CameraView）。連続的に動かせる、指でつかみやすい大きさのつまみ */
+@keyframes zoom-rise {
+  0% {
+    transform: scaleY(0.15) translateY(16px);
+    opacity: 0;
+  }
+  70% {
+    transform: scaleY(1.04) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.zoom-rise {
+  transform-origin: bottom;
+  animation: zoom-rise 0.28s cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+.zoom-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 32px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.zoom-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--foreground) 35%, transparent);
+}
+
+.zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -11px;
+  border-radius: 9999px;
+  border: 3px solid var(--background);
+  background: var(--primary);
+}
+
+.zoom-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--foreground) 35%, transparent);
+}
+
+.zoom-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 3px solid var(--background);
+  background: var(--primary);
 }

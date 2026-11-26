@@ -2,15 +2,23 @@ import type { OcrEngine, OcrLine } from "./engine";
 
 type Reply = { id: number; lines?: OcrLine[]; error?: string };
 
+/** 本読み用（small）の Worker */
+export const createSmallWorker = () => new Worker(new URL("./paddle.worker.ts", import.meta.url), { type: "module" });
+
+/** 自動撮影の下見用（tiny）の Worker */
+export const createTinyWorker = () => new Worker(new URL("./tiny.worker.ts", import.meta.url), { type: "module" });
+
 /** PaddleOCR を Worker で動かし、画像バイト列を渡して行を受け取る（メインスレッドを止めない） */
 export class WorkerOcrEngine implements OcrEngine {
   private worker: Worker | null = null;
   private seq = 0;
   private pending = new Map<number, { resolve: (l: OcrLine[]) => void; reject: (e: Error) => void }>();
 
+  constructor(private readonly createWorker: () => Worker = createSmallWorker) {}
+
   private ensure(): Worker {
     if (this.worker) return this.worker;
-    const w = new Worker(new URL("./paddle.worker.ts", import.meta.url), { type: "module" });
+    const w = this.createWorker();
     w.onmessage = (e: MessageEvent<Reply>) => {
       const p = this.pending.get(e.data.id);
       if (!p) return;
@@ -42,5 +50,13 @@ export class WorkerOcrEngine implements OcrEngine {
 
   readLines(image: ArrayBuffer): Promise<OcrLine[]> {
     return this.call({ type: "read", image }, [image]);
+  }
+
+  /** Worker を止めて、メモリを返す（待っていた呼び出しは失敗にする） */
+  dispose() {
+    for (const p of this.pending.values()) p.reject(new Error("disposed"));
+    this.pending.clear();
+    this.worker?.terminate();
+    this.worker = null;
   }
 }

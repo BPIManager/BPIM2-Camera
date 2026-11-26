@@ -8,6 +8,28 @@ import { VitePWA } from "vite-plugin-pwa";
 
 const ISOLATION_HEADERS = { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp" };
 
+/**
+ * 同一オリジンの中継。本番は nginx 等で同じ中継を置く（README 参照）
+ * - /__/auth: サインインの authDomain をこのアプリのホストにするための Firebase への中継
+ * - /bpim2-api: 認証つき BPIM2 API（CORS 非対応）をブラウザから呼ぶための中継
+ */
+const PROXY = {
+  "/__/auth": { target: "https://bpimv2.firebaseapp.com", changeOrigin: true },
+  "/bpim2-api": { target: "https://bpi2.poyashi.me", changeOrigin: true, xfwd: true, rewrite: (p: string) => p.replace(/^\/bpim2-api/, "") },
+};
+
+/** 開発・プレビューで隔離ヘッダーを付ける。サインイン用ページ（signin.html と、Firebase の中継 /__/auth/）は除く（Firebase のリダイレクトが阻まれるため） */
+function isolation(): Plugin {
+  // 戻り値を返さない（関数を返すと Vite が「後処理フック」として呼んでしまう）
+  const add = (server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void }, next: () => void) => void) => unknown } }) => {
+    server.middlewares.use((req, res, next) => {
+      if (!req.url?.startsWith("/signin.html") && !req.url?.startsWith("/__/auth/")) for (const [k, v] of Object.entries(ISOLATION_HEADERS)) res.setHeader(k, v);
+      next();
+    });
+  };
+  return { name: "isolation-headers", configureServer: add, configurePreviewServer: add };
+}
+
 /** 開発中だけ、ブラウザから送られた読み取りログをこのターミナルに表示する（スマホ実機のデバッグ用） */
 function ocrDebugLog(): Plugin {
   return {
@@ -47,6 +69,7 @@ function ocrDebugLog(): Plugin {
 
 export default defineConfig({
   plugins: [
+    isolation(),
     ocrDebugLog(),
     react(),
     tailwindcss(),
@@ -71,6 +94,8 @@ export default defineConfig({
       workbox: {
         // 大きいもの（OCR のモデル・WASM）は事前取得せず、初めて使ったときに保存する
         globPatterns: ["**/*.{js,css,html,png,json}"],
+        // サインインページはアプリ本体に置き換えず、そのまま取得する
+        navigateFallbackDenylist: [/^\/signin\.html/],
         globIgnores: ["models/paddle/**"],
         runtimeCaching: [
           {
@@ -84,8 +109,9 @@ export default defineConfig({
   ],
   // tailscale serve 経由（*.ts.net）でスマホから開けるようにする
   // 分離されたページ（cross-origin isolated）にすると、OCR の WASM がマルチスレッドで動き、約 3 倍速くなる
-  server: { host: true, allowedHosts: [".ts.net"], headers: ISOLATION_HEADERS },
-  preview: { headers: ISOLATION_HEADERS },
+  server: { host: true, allowedHosts: [".ts.net"], proxy: PROXY },
+  preview: { proxy: PROXY },
+  build: { rollupOptions: { input: { main: path.resolve(import.meta.dirname, "index.html"), signin: path.resolve(import.meta.dirname, "signin.html") } } },
   // PaddleOCR は CPU（WASM）だけで動かす。WebGPU 版の WASM は 30MB と大きい
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src"), "onnxruntime-web": "onnxruntime-web/wasm" } },
   test: { environment: "node", include: ["test/**/*.test.ts"] },
