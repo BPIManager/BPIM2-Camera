@@ -1,9 +1,27 @@
 {
-  "note": "正解ラベル付きサンプル。image は SAMPLE_DIR（既定 D:/camera-example）からの相対名。region は画像に対する割合で、スコアの数字を含む範囲",
+  "note": "正解ラベル付きサンプル。image は SAMPLE_DIR（既定 D:/camera-example）からの相対名。hint は画像に対する割合(%)で、スコアの数字列の左上のおおよその位置（検出した候補から最も近いものを選ぶ）。region は割合で指定した範囲を直接使う。labelSource: visual は画像を目視して読んだ値（画面下の差分表示との整合も確認済み）",
   "samples": [
-    { "image": "1p-preview (1).webp", "digits": "3365", "region": { "x": 0.32, "y": 0.43, "width": 0.19, "height": 0.055 } },
-    { "image": "1p-preview.webp", "digits": "1796", "region": { "x": 0.32, "y": 0.43, "width": 0.19, "height": 0.055 } },
-    { "image": "1p-preview (2).webp", "digits": "3304", "region": { "x": 0.29, "y": 0.42, "width": 0.17, "height": 0.055 } },
-    { "image": "1p-preview (3).webp", "digits": "3451", "region": { "x": 0.27, "y": 0.4, "width": 0.18, "height": 0.055 } }
+    { "image": "1p-preview (1).webp", "digits": "3365", "hint": { "x": 35, "y": 44 }, "labelSource": "known" },
+    { "image": "1p-preview (3).webp", "digits": "3451", "hint": { "x": 30, "y": 41 }, "labelSource": "known" },
+    { "image": "2p-HVw5dNXbkAAZMVR.jpg", "digits": "3422", "hint": { "x": 77, "y": 62 }, "labelSource": "visual" },
+    { "image": "HT9FibbbwAApVuN.jpg", "digits": "2309", "hint": { "x": 77, "y": 43 }, "labelSource": "visual" },
+    { "image": "HT9FibeasAA-Hq0.jpg", "digits": "2035", "hint": { "x": 72, "y": 48 }, "labelSource": "visual" },
+    { "image": "HT9FibRbMAAEu85.jpg", "digits": "2772", "hint": { "x": 74, "y": 48 }, "labelSource": "visual" },
+    { "image": "HT9FibZbgAAzEnU.jpg", "digits": "2249", "hint": { "x": 74, "y": 47 }, "labelSource": "visual" },
+    { "image": "HTuPEx2awAAfr8j.jpg", "digits": "2820", "hint": { "x": 31, "y": 45 }, "labelSource": "visual" },
+    { "image": "HUmXqr7awAA4m1E.jpg", "digits": "2316", "hint": { "x": 77, "y": 49 }, "labelSource": "visual" },
+    { "image": "HUmXqsSacAASk5r.jpg", "digits": "2252", "hint": { "x": 75, "y": 50 }, "labelSource": "visual" },
+    { "image": "HV4q64obsAEMAdk.jpg", "digits": "2954", "hint": { "x": 77, "y": 50 }, "labelSource": "visual" },
+    { "image": "HVkHdqfacAAcXyE.jpg", "digits": "2688", "hint": { "x": 77, "y": 48 }, "labelSource": "visual" },
+    { "image": "HVkHdqkaIAECw0Q.jpg", "digits": "2462", "hint": { "x": 77, "y": 52 }, "labelSource": "visual" },
+    { "image": "HVkHdqybIAAVtc_.jpg", "digits": "3453", "hint": { "x": 79, "y": 48 }, "labelSource": "visual" },
+    { "image": "HWDBl18aQAAeBlw.jpg", "digits": "3042", "hint": { "x": 77, "y": 50 }, "labelSource": "visual" },
+    { "image": "HWDBl2CaYAAThof.jpg", "digits": "2207", "hint": { "x": 80, "y": 50 }, "labelSource": "visual" },
+    { "image": "HWDBl2DagAASTSq.jpg", "digits": "2389", "hint": { "x": 81, "y": 44 }, "labelSource": "visual" },
+    { "image": "HWGZnQ-aIAE5H_p.jpg", "digits": "1779", "hint": { "x": 29, "y": 43 }, "labelSource": "visual" },
+    { "image": "HWqHk6KaAAAiCrB.jpg", "digits": "3695", "hint": { "x": 33, "y": 49 }, "labelSource": "visual" },
+    { "image": "HXoW36PbkAAqooH.jpg", "digits": "3953", "hint": { "x": 32, "y": 52 }, "labelSource": "visual" },
+    { "image": "HXuOs8BbgAAwsTr.jpg", "digits": "3312", "hint": { "x": 41, "y": 45 }, "labelSource": "visual" },
+    { "image": "HXuOs8CawAA1o9r.jpg", "digits": "3323", "hint": { "x": 40, "y": 48 }, "labelSource": "visual" }
   ]
 }
