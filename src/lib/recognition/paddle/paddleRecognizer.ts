@@ -1,5 +1,6 @@
 import type { RawResult } from "@/lib/domain/types";
 import type { SongMasterEntry } from "@/lib/songs/types";
+import { logOcr } from "@/lib/debug/ocrLog";
 import type { Recognizer, RecognizeInput } from "../recognizer";
 import type { OcrEngine, OcrLine } from "./engine";
 import { rawFromPaddle } from "./fromPaddle";
@@ -27,10 +28,19 @@ export class PaddleRecognizer implements Recognizer {
   async recognize(input: RecognizeInput): Promise<RawResult | null> {
     if (!input.regions) return this.fallback ? this.fallback.recognize(input) : null;
     const r = input.regions;
+    const t0 = performance.now();
     const title = await this.engine.readLines(await encode(r.title, TITLE_WIDTH));
     const score: OcrLine[][] = [];
     for (const w of SCORE_WIDTHS) score.push(await this.engine.readLines(await encode(r.score, w)));
     const judge = await this.engine.readLines(await encode(r.judge, SMALL_WIDTH));
-    return rawFromPaddle({ title, score, judge }, this.getMaster());
+    const raw = rawFromPaddle({ title, score, judge }, this.getMaster());
+    logOcr({
+      title,
+      score,
+      judge,
+      result: raw && { title: raw.titleText, notes: raw.notes, difficulty: raw.difficulty, level: raw.level, ex: raw.exScore.value, judge: raw.judge },
+      ms: performance.now() - t0,
+    });
+    return raw;
   }
 }

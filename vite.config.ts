@@ -1,11 +1,32 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
+import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+/** 開発中だけ、ブラウザから送られた読み取りログをこのターミナルに表示する（スマホ実機のデバッグ用） */
+function ocrDebugLog(): Plugin {
+  return {
+    name: "ocr-debug-log",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use("/__debug/ocr", (req, res) => {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          console.log(`\n[ocr ${new Date().toLocaleTimeString("ja-JP")}]\n${body}\n`);
+          res.statusCode = 204;
+          res.end();
+        });
+      });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
+    ocrDebugLog(),
     react(),
     tailwindcss(),
     VitePWA({

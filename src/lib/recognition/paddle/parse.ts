@@ -1,14 +1,25 @@
 import type { OcrLine } from "./engine";
 import type { Observations } from "../consensus/engine";
-import { toDigits } from "../tokens";
 
 type Judge = NonNullable<Observations["judge"]>;
 
-/** 行末の数字（OCR が取り違えやすい O/I などは数字に寄せる）。1〜4 桁 */
+/**
+ * 小さい数字で PaddleOCR が取り違える文字を、見た目の近い数字に寄せる。
+ * 寄せた結果が正しいかは、スコア欄などとの合意で確かめる（ここでは当て推量でよい）。
+ */
+const LOOKALIKE: Record<string, string> = {
+  O: "0", o: "0", 口: "0", 回: "0", "□": "0", "〇": "0", "○": "0",
+  I: "1", l: "1", "|": "1", "丨": "1",
+  Z: "2", S: "5", G: "6", B: "8", 旦: "8", 恒: "8", 日: "8", 号: "9", H: "4",
+};
+const escapeForClass = (c: string) => (c === "|" ? "\\|" : c);
+const DIGIT_LIKE = new RegExp("([0-9" + Object.keys(LOOKALIKE).map(escapeForClass).join("") + "]{1,4})\\s*$");
+
+/** 行末の数字（取り違えやすい文字は数字に寄せる）。1〜4 桁 */
 function trailingNumber(text: string): number | null {
-  const m = /([0-9OoIl|SB]{1,4})\s*$/.exec(text.trim());
+  const m = DIGIT_LIKE.exec(text.trim());
   if (!m) return null;
-  const s = toDigits(m[1]);
+  const s = [...m[1]].map((c) => LOOKALIKE[c] ?? c).join("");
   return /^[0-9]{1,4}$/.test(s) ? Number(s) : null;
 }
 
