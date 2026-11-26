@@ -9,3 +9,4 @@ dist
 eval-out.txt
 *.traineddata
 internal/
+/public/models/paddle/

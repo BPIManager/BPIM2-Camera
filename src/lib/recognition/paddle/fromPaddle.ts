@@ -26,7 +26,7 @@ export function pickTitleLine(lines: readonly OcrLine[]): string | null {
 /** PaddleOCR の読みから結果を組み立てる。曲名で曲を特定し、ノーツ数が分かればスコア・判定・差分を合意で解く */
 export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntry[]): RawResult | null {
   const titleTokens: OcrToken[] = r.title.flatMap((l) => l.text.split(/\s+/).filter(Boolean).map((text) => ({ text, confidence: l.confidence })));
-  const scoreReadings = r.score.map((lines) => digitRuns(lines.map((l) => l.text)));
+  const scoreReadings = r.score.map((lines) => digitRuns(lines.map((l) => l.text)).flatMap(scoreCandidates));
   const judge = r.judge ? parseJudgeRows(r.judge) : undefined;
   const rankGap = r.rank ? parseRankGap(r.rank.map((l) => l.text)) : undefined;
   const hasExtras = (judge && (judge.pg !== undefined || judge.gr !== undefined)) || rankGap;

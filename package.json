@@ -11,7 +11,8 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "eval": "vitest run --config vitest.eval.config.ts",
-    "train:digits": "vitest run --config vitest.eval.config.ts train-digits"
+    "train:digits": "vitest run --config vitest.eval.config.ts train-digits",
+    "models:fetch": "node scripts/fetch-models.mjs"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.17",

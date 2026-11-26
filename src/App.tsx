@@ -9,6 +9,9 @@ import SettingsView from "@/features/settings/SettingsView";
 import { useMaster } from "@/hooks/useMaster";
 import { useSettings } from "@/hooks/useSettings";
 import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
+import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
+import { WorkerOcrEngine } from "@/lib/recognition/paddle/workerEngine";
+import type { Recognizer } from "@/lib/recognition/recognizer";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { resolveResult } from "@/lib/recognition/resolve";
 import type { GuideKey } from "@/lib/vision/guides";
@@ -36,12 +39,17 @@ export default function App() {
   const onViewSize = useCallback((s: { width: number; height: number }) => s.width > 0 && setViewSize(s), []);
   const songsRef = useRef<readonly SongMasterEntry[]>(songs);
   songsRef.current = songs;
-  const recognizerRef = useRef<TesseractRecognizer | null>(null);
-  recognizerRef.current ??= new TesseractRecognizer(() => songsRef.current);
+  const engineRef = useRef<WorkerOcrEngine | null>(null);
+  const recognizerRef = useRef<Recognizer | null>(null);
+  if (!recognizerRef.current) {
+    engineRef.current = new WorkerOcrEngine();
+    // 枠で撮った画像は PaddleOCR、全体画像の取り込みは Tesseract で読む
+    recognizerRef.current = new PaddleRecognizer(engineRef.current, () => songsRef.current, new TesseractRecognizer(() => songsRef.current));
+  }
 
-  // OCR ワーカーを撮影前に立ち上げておく
+  // PaddleOCR のモデルを撮影前に読み込んでおく
   useEffect(() => {
-    void recognizerRef.current?.warmUp().catch(() => undefined);
+    void engineRef.current?.warmUp().catch(() => undefined);
   }, []);
 
   if (!settings.onboarded) {

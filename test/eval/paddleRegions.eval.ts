@@ -15,7 +15,7 @@ interface Label { image: string; digits?: string; boxes?: Box[]; size?: { w: num
 const union = (bs: Box[]): Box => ({ x0: Math.min(...bs.map((b) => b.x0)), y0: Math.min(...bs.map((b) => b.y0)), x1: Math.max(...bs.map((b) => b.x1)), y1: Math.max(...bs.map((b) => b.y1)) });
 
 /** ラベルの箱の周りを、撮影枠のつもりで余白付きで切り出す */
-async function crop(file: string, size: { w: number; h: number }, r: Box, width = 700) {
+async function crop(file: string, size: { w: number; h: number }, r: Box, width = Number(process.env.CROP_WIDTH ?? 700)) {
   const base = sharp(await sharp(file).rotate().resize({ width: size.w, height: size.h, fit: "fill" }).png().toBuffer());
   const left = Math.min(size.w - 2, Math.max(0, Math.round(r.x0))), top = Math.min(size.h - 2, Math.max(0, Math.round(r.y0)));
   const w = Math.max(2, Math.min(size.w - left, Math.round(r.x1) - left)), h = Math.max(2, Math.min(size.h - top, Math.round(r.y1) - top));
