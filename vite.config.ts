@@ -68,6 +68,6 @@ export default defineConfig({
   server: { host: true, allowedHosts: [".ts.net"], headers: ISOLATION_HEADERS },
   preview: { headers: ISOLATION_HEADERS },
   // PaddleOCR は CPU（WASM）だけで動かす。WebGPU 版の WASM は 30MB と大きい
-  resolve: { alias: { "@": path.resolve(__dirname, "src"), "onnxruntime-web": "onnxruntime-web/wasm" } },
+  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src"), "onnxruntime-web": "onnxruntime-web/wasm" } },
   test: { environment: "node", include: ["test/**/*.test.ts"] },
 });
