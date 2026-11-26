@@ -20,3 +20,13 @@ describe("maskVariant", () => {
     expect(out[4]).toBe(0);
   });
 });
+
+describe("cyanFill（スコアの水色の中身だけ）", () => {
+  const px = (r: number, g: number, b: number) => maskVariant(new Uint8ClampedArray([r, g, b, 255]), "cyanFill")[0];
+  it("明るい水色は文字として残す", () => expect(px(120, 215, 232)).toBe(0));
+  it("暗い縁取り・白・ピンクの背景は除く", () => {
+    expect(px(20, 90, 120)).toBe(255);
+    expect(px(240, 240, 240)).toBe(255);
+    expect(px(235, 140, 200)).toBe(255);
+  });
+});

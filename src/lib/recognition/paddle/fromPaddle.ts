@@ -4,14 +4,16 @@ import { matchChart } from "@/lib/songs/matcher";
 import { rawFromRegions } from "../fromRegions";
 import { parseChartHints, type OcrToken } from "../tokens";
 import type { OcrLine } from "./engine";
-import { digitRuns, parseJudgeRows, scoreCandidates } from "./parse";
+import type { Observations } from "../consensus/engine";
+import { digitRuns, parseJudgeNumbers, parseJudgeRows, scoreCandidates } from "./parse";
 
 export interface PaddleReadings {
   /** 曲名・譜面の枠の行 */
   title: readonly OcrLine[];
   /** スコア欄の読み。前処理ごとに 1 件 */
   score: readonly (readonly OcrLine[])[];
-  judge?: readonly OcrLine[];
+  /** 判定表の読み。拡大率を変えた読みが複数あってよい */
+  judge?: readonly (readonly OcrLine[])[];
 }
 
 const META = /NOTES?|ANOTHER|HYPER|NORMAL|LEGGENDARIA|BEGINNER|^\s*(SP|DP)\b/i;
@@ -40,11 +42,32 @@ export function bestTitleLine(lines: readonly OcrLine[], master: readonly SongMa
   return best && best.score >= 0.6 ? best.text : pickTitleLine(lines);
 }
 
+type Judge = NonNullable<Observations["judge"]>;
+
+/**
+ * 判定表の読みから、PG・GR を決める。ラベル（PGREAT・GREAT）が読めていればそれに従う。
+ * 数字だけの枠のときは、読めた数字をすべて集め、「PG × 2 ＋ GR ＝ スコア欄の読み」になる組み合わせ（PG > GR）が
+ * ちょうど 1 つあればそれを採る。スコア欄と独立した読みの一致なので、裏付けになる。
+ */
+export function judgeFromReads(reads: readonly (readonly OcrLine[])[], scores: ReadonlySet<number>): Judge | undefined {
+  for (const lines of reads) {
+    const labeled = parseJudgeRows(lines);
+    if (labeled.pg !== undefined && labeled.gr !== undefined) return labeled;
+  }
+  const pool = [...new Set(reads.flatMap((lines) => parseJudgeNumbers(lines)))];
+  const pairs: { pg: number; gr: number }[] = [];
+  for (const pg of pool) for (const gr of pool) if (pg >= 10 && pg > gr && scores.has(pg * 2 + gr)) pairs.push({ pg, gr });
+  if (pairs.length === 1) return pairs[0];
+  // 裏付けのない読み。EX は作らない
+  return undefined;
+}
+
 /** PaddleOCR の読みから結果を組み立てる。曲名で曲を特定し、ノーツ数が分かればスコア・判定・差分を合意で解く */
 export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntry[]): RawResult | null {
   const titleTokens: OcrToken[] = r.title.flatMap((l) => l.text.split(/\s+/).filter(Boolean).map((text) => ({ text, confidence: l.confidence })));
   const scoreReadings = r.score.map((lines) => digitRuns(lines.map((l) => l.text)).flatMap(scoreCandidates));
-  const judge = r.judge ? parseJudgeRows(r.judge) : undefined;
+  const scoreSet = new Set(scoreReadings.flat().map(Number).filter((n) => Number.isInteger(n)));
+  const judge = r.judge ? judgeFromReads(r.judge, scoreSet) : undefined;
   const extras = judge && (judge.pg !== undefined || judge.gr !== undefined) ? { judge } : undefined;
   return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true);
 }

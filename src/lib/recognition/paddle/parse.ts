@@ -114,3 +114,16 @@ export function scoreCandidates(run: string): string[] {
   if (run.length === 5) out.add(run.slice(1));
   return [...out];
 }
+
+/**
+ * ラベルが枠の外にあり、数字だけが並ぶ判定表の読み。斜めに写ると行の位置が大きく重なるので、
+ * 順序には頼らず、読めた数字をすべて返す（重複は除く）。
+ */
+export function parseJudgeNumbers(lines: readonly OcrLine[]): number[] {
+  const out = new Set<number>();
+  for (const l of lines) {
+    const n = trailingNumber(l.text);
+    if (n !== null) out.add(n);
+  }
+  return [...out];
+}

@@ -1,5 +1,5 @@
 /** RGBA 画素列に対する前処理。OCR の入力用に「文字だけを残した白地に黒字」の画像を作る */
-export type Variant = "contrast" | "white" | "cyan" | "bright";
+export type Variant = "contrast" | "white" | "cyan" | "bright" | "cyanFill" | "cyanFillLoose";
 
 export const VARIANTS: readonly Variant[] = ["white", "cyan", "contrast", "bright"];
 
@@ -10,6 +10,13 @@ const PREDICATES: Record<Exclude<Variant, "contrast">, Pred> = {
   white: (r, g, b) => Math.min(r, g, b) > 185,
   /** 今回スコアの水色の数字 */
   cyan: (r, g, b) => b > 170 && g > 130 && r < 110,
+  /**
+   * 今回スコアの水色の数字の「中身」だけ（明るい水色）。暗い縁取りや、左隣の前回スコア（白）、ピンクの背景は除く。
+   * 写真でも、縁取りだけが残ったり、太くつぶれたりしにくい
+   */
+  cyanFill: (r, g, b) => g > 195 && b > 200 && r < g - 45 && b >= g - 10,
+  /** cyanFill より緩い条件。暗めに写った写真用 */
+  cyanFillLoose: (r, g, b) => g > 170 && b > 180 && r < g - 25 && b - r > 50,
   /** 明るい色全般（黄・オレンジ・白のラベルや数字） */
   bright: (r, g, b) => Math.max(r, g, b) > 200 && r + g + b > 480,
 };

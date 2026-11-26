@@ -34,7 +34,7 @@ describe("rawFromPaddle", () => {
       {
         title: [line("Angel's Lader", 95), line("71800 NOTES"), line("ANOTHER 12")],
         score: [[line("3304")], [line("3304")]],
-        judge: [line("PGREAT 1544", 90, 0), line("GREAT 216", 90, 30)],
+        judge: [[line("PGREAT 1544", 90, 0), line("GREAT 216", 90, 30)]],
       },
       master,
     );
@@ -62,5 +62,31 @@ describe("scoreCandidates", () => {
     expect(scoreCandidates("02382")).toContain("2382");
     expect(scoreCandidates("52316")).toContain("2316");
     expect(scoreCandidates("3304")).toEqual(["3304"]);
+  });
+});
+
+describe("判定の枠が数字だけのとき", () => {
+  const nums = (...v: [string, number][]) => v.map(([text, y]) => line(text, 90, y));
+  it("1 行目を PG とし、スコア欄から逆算した GR が読めていれば確定する", () => {
+    const r = rawFromPaddle(
+      {
+        title: [line("with you", 99), line("ANOTHER 9"), line("0891 NOTES")],
+        score: [[line("1779")]],
+        judge: [nums(["889", 0], ["1", 30], ["0", 60], ["0", 90], ["2", 120])],
+      },
+      [{ songId: 1, title: "with you…", playStyle: "SP", difficulty: "ANOTHER", level: 9, notes: 891 }],
+    );
+    expect(r?.exScore.value).toBe(1779);
+  });
+  it("逆算した GR が読めていなければ確定しない", () => {
+    const r = rawFromPaddle(
+      {
+        title: [line("with you", 99), line("ANOTHER 9"), line("0891 NOTES")],
+        score: [[line("1779")]],
+        judge: [nums(["889", 0], ["7", 30], ["0", 60])],
+      },
+      [{ songId: 1, title: "with you…", playStyle: "SP", difficulty: "ANOTHER", level: 9, notes: 891 }],
+    );
+    expect(r?.exScore.value).toBeNull();
   });
 });
