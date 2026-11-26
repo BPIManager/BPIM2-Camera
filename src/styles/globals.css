@@ -24,7 +24,7 @@
   --border: oklch(0.32 0.01 255);
   --input: oklch(0.32 0.01 255);
   --ring: oklch(0.86 0.15 195);
-  --guide: oklch(1 0 0);
+  --guide: oklch(0.98 0.01 255);
   --scrim: oklch(0 0 0 / 0.6);
   --radius: 0.625rem;
 }
@@ -67,6 +67,10 @@
     font-family: var(--font-sans);
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
+  }
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
   }
   #root {
     height: 100%;
