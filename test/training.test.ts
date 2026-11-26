@@ -47,3 +47,12 @@ describe("buildTrainingZip", () => {
     expect(Array.from(files["images/s1_score.jpg"])).toEqual([1, 2, 3]);
   });
 });
+
+describe("OCR の読み取りの記録", () => {
+  it("あれば labels.json に入れ、なければ入れない", async () => {
+    const ocr = { title: ["Verflucht(99)"], score: [["2401(90)"]], judge: [], result: { ex: 4234 }, ms: 812 };
+    const { labels } = await buildTrainingZip([sample("s1", { ocr }), sample("s2")]);
+    expect(labels[0].ocr).toEqual(ocr);
+    expect(labels[1].ocr).toBeUndefined();
+  });
+});

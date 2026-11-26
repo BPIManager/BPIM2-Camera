@@ -128,6 +128,7 @@ export default function ResultDrawer({
         scoreCrop: draft.regions.score,
         titleCrop: draft.regions.title,
         judgeCrop: draft.regions.judge,
+        ocr: draft.ocr,
       });
       // 貯めたものを送る。確定の操作は待たせない
       void flushIfEnabled(settings)?.catch(() => undefined);

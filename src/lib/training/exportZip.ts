@@ -1,5 +1,6 @@
 import { zipSync } from "fflate";
 import type { TrainingSample } from "@/lib/storage/db";
+import type { OcrTrace } from "@/lib/recognition/recognizer";
 
 export interface TrainingLabel {
   id: string;
@@ -18,6 +19,8 @@ export interface TrainingLabel {
   scoreImage: string;
   titleImage: string;
   judgeImage?: string;
+  /** OCR が読んだ文字と確度・確定した結果（正解ラベルと突き合わせて、読み間違いを調べる） */
+  ocr?: OcrTrace;
 }
 
 /** 正解ラベル。画像のパスは、zip や R2 のなかでの名前を呼び出し側が決める */
@@ -35,6 +38,7 @@ export function sampleLabel(s: TrainingSample, images: { scoreImage: string; tit
     notes: s.chart.notes,
     autoConfirmed: s.autoConfirmed,
     correctedFields: s.correctedFields,
+    ocr: s.ocr,
     ...images,
   };
 }

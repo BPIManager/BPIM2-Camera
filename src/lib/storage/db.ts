@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { ChartRef, ResultRecord } from "@/lib/domain/types";
+import type { OcrTrace } from "@/lib/recognition/recognizer";
 import type { SongMaster } from "@/lib/songs/types";
 
 /** 読み取り精度の改善に使う学習サンプル。ユーザーが確認・修正した最終値が正解ラベル */
@@ -20,6 +21,8 @@ export interface TrainingSample {
   judgeCrop?: Blob;
   /** サーバーへ送り終えた時刻（ms）。未送信は undefined */
   uploadedAt?: number;
+  /** OCR の読み取りの記録（読んだ文字と確度・確定した結果）。古いサンプルにはない */
+  ocr?: OcrTrace;
 }
 
 interface CameraDB extends DBSchema {

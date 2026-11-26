@@ -1,7 +1,5 @@
 import type { OcrLine } from "@/lib/recognition/paddle/engine";
-
-/** 認識ロジックの版。コードを変えたら更新する（スマホが古いコードのままかを、ログで見分けるため） */
-export const OCR_REV = "r18 曲名が決まらないとき、傾きを直して読み直す";
+import type { OcrTrace } from "@/lib/recognition/recognizer";
 
 export interface OcrDebugEntry {
   title: readonly OcrLine[];
@@ -22,14 +20,8 @@ export const setDebugMode = (on: boolean): void => {
 
 /** 画面で見るために貯める件数（新しい順に、これだけ残す） */
 const MAX_ENTRIES = 10;
-export interface DebugRecord {
+export interface DebugRecord extends OcrTrace {
   at: number;
-  rev: string;
-  title: string[];
-  score: string[][];
-  judge: string[];
-  result: unknown;
-  ms: number;
 }
 let entries: DebugRecord[] = [];
 const listeners = new Set<() => void>();
@@ -43,6 +35,11 @@ export const clearDebugRecords = (): void => {
   entries = [];
   emit();
 };
+
+const fmt = (lines: readonly OcrLine[]) => lines.map((l) => `${l.text}(${Math.round(l.confidence)})`);
+
+/** 読み取った行を、記録（文字と確度の文字列）にする */
+export const toTrace = (e: OcrDebugEntry): OcrTrace => ({ title: fmt(e.title), score: e.score.map(fmt), judge: fmt(e.judge), result: e.result, ms: Math.round(e.ms) });
 
 const texts = (lines: readonly OcrLine[]) => lines.map((l) => `${l.text}(${Math.round(l.confidence)})`).join(" | ");
 
@@ -59,8 +56,7 @@ export function logDebug(...lines: string[]): void {
  */
 export function logOcr(e: OcrDebugEntry): void {
   if (debugEnabled) {
-    const fmt = (lines: readonly OcrLine[]) => lines.map((l) => `${l.text}(${Math.round(l.confidence)})`);
-    entries = [{ at: Date.now(), rev: OCR_REV, title: fmt(e.title), score: e.score.map(fmt), judge: fmt(e.judge), result: e.result, ms: Math.round(e.ms) }, ...entries].slice(0, MAX_ENTRIES);
+    entries = [{ at: Date.now(), ...toTrace(e) }, ...entries].slice(0, MAX_ENTRIES);
     emit();
   }
   if (!import.meta.env.DEV) return;
@@ -69,7 +65,6 @@ export function logOcr(e: OcrDebugEntry): void {
     ...e.score.map((s, i) => `score${i + 1}: ${texts(s)}`),
     `judge : ${texts(e.judge)}`,
     `result: ${JSON.stringify(e.result)}  (${Math.round(e.ms)}ms)`,
-    `rev   : ${OCR_REV}`,
   ];
   logDebug(...lines);
 }

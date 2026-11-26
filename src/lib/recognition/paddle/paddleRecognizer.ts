@@ -2,7 +2,7 @@ import type { RawResult } from "@/lib/domain/types";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { isolateDigitRow } from "../ocr/isolate";
 import { maskVariant, type Variant } from "../ocr/preprocess";
-import { logOcr } from "@/lib/debug/ocrLog";
+import { logOcr, toTrace } from "@/lib/debug/ocrLog";
 import type { Recognizer, RecognizeInput } from "../recognizer";
 import type { OcrEngine, OcrLine } from "./engine";
 import { resolveResult } from "../resolve";
@@ -122,13 +122,15 @@ export class PaddleRecognizer implements Recognizer {
       raw = rawFromPaddle({ title, score, scoreGroups, judge }, this.getMaster());
       announceIfResolved(raw);
     }
-    logOcr({
+    const entry = {
       title,
       score,
       judge: judge.flat(),
       result: raw && { title: raw.titleText, notes: raw.notes, difficulty: raw.difficulty, level: raw.level, ex: raw.exScore.value, judge: raw.judge },
       ms: performance.now() - t0,
-    });
+    };
+    logOcr(entry);
+    input.onTrace?.(toTrace(entry));
     return raw;
   }
 }

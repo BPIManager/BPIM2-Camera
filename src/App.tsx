@@ -17,7 +17,7 @@ import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
 import { WorkerOcrEngine } from "@/lib/recognition/paddle/workerEngine";
 import { isAbortError, raceAbort } from "@/lib/async/abort";
 import { logDebug, saveCaptures, setDebugMode } from "@/lib/debug/ocrLog";
-import type { Recognizer, SongProgress } from "@/lib/recognition/recognizer";
+import type { OcrTrace, Recognizer, SongProgress } from "@/lib/recognition/recognizer";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { resolveResult } from "@/lib/recognition/resolve";
 import type { GuideKey } from "@/lib/vision/guides";
@@ -90,6 +90,7 @@ export default function App() {
     abortRef.current = controller;
     let cancelled = false;
     let raw = null;
+    let ocr: OcrTrace | undefined;
     try {
       const full = await createImageBitmap(image);
       const crops = regions
@@ -104,7 +105,7 @@ export default function App() {
       logDebug(`撮影（保存: internal/captures/${stamp}_*）: ${source} / 枠で切り出し: ${crops ? "あり" : "なし"} / 分離ページ: ${self.crossOriginIsolated}`);
       // 画像は、読み取りが（中止後に遅れて）終わるまで閉じない
       const task = recognizerRef.current!
-        .recognize({ full, regions: crops, onStage: setStage, onSong: setSong, signal: controller.signal })
+        .recognize({ full, regions: crops, onStage: setStage, onSong: setSong, onTrace: (t) => (ocr = t), signal: controller.signal })
         .finally(() => {
           full.close();
           if (crops) for (const b of Object.values(crops)) b.close();
@@ -132,6 +133,7 @@ export default function App() {
       image,
       source,
       regions,
+      ocr,
       raw,
       resolution: raw ? resolveResult(raw, songs) : null,
     });
