@@ -23,6 +23,9 @@ export interface MatchOutcome {
 }
 
 const CONFIDENT_SCORE = 0.85;
+/** 曲名が少し崩れていても、2 位を大きく引き離していれば確定してよい（OCR で末尾が欠けるなど） */
+const LEAD_SCORE = 0.65;
+const LEAD_GAP = 0.25;
 
 /**
  * 難易度＋レベル＋SP/DP＋ノーツ数で絞り込み、曲名 OCR を決め手にする。
@@ -58,6 +61,7 @@ export function matchChart(master: readonly SongMasterEntry[], q: MatchQuery): M
   const confident =
     !!q.titleText &&
     ((top[0].score >= CONFIDENT_SCORE && top[0].score - second >= 0.1) ||
+      (top[0].score >= LEAD_SCORE && top[0].score - second >= LEAD_GAP) ||
       // 難易度とレベルで 1 件に絞れていれば、曲名が少し崩れていても確定してよい
       (distinct.length === 1 && q.difficulty !== null && q.level !== null && top[0].score >= 0.6));
   return { candidates: top, confident };

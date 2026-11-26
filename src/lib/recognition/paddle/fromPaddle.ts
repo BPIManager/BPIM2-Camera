@@ -6,7 +6,7 @@ import { parseChartHints, type OcrToken } from "../tokens";
 import type { OcrLine } from "./engine";
 import type { Observations } from "../consensus/engine";
 import { isReliableGr, type JudgeRead } from "../judgeRead";
-import { digitRuns, parseJudgeReads, parseJudgeRows, scoreCandidates } from "./parse";
+import { digitRuns, parseJudgeReads, parseJudgeRows, scoreCandidateReads, scoreCandidates } from "./parse";
 
 export interface PaddleReadings {
   /** 曲名・譜面の枠の行 */
@@ -95,31 +95,49 @@ export function crossGroupValues(score: readonly (readonly OcrLine[])[], groups:
   });
 }
 
+const DERIVED_RIVAL_FACTOR = 0.7;
+
+/** a が b より短い読み（桁が欠けた断片。例: 179 や 336 は 4 桁のスコアの一部）。別の値の根拠としては数えない */
+function isFragment(a: string, b: string): boolean {
+  return a.length < b.length;
+}
+
 /**
- * 確度 90 以上の読みが 2 回以上そろった値。他に確度 80 以上の別の値があれば、決められないので空にする。
+ * 複数の読みが指している値。同じ値が 2 回以上の読みに現れ、確度の合算（1 − Π(1 − 確度)）が 0.97 以上のものを返す。
+ * 確度が低い読みでも、独立に何度も同じ値を指していれば根拠になる。他に合算 0.8 以上の別の値があれば、決められないので空にする。
  */
-export function strongScoreValues(score: readonly (readonly OcrLine[])[]): number[] {
-  const high = new Map<number, number>(); // 値 → 確度 90 以上で読めた回数（1 回の読みで 1 と数える）
-  const rival = new Set<number>(); // 確度 80 以上で読めた値
+export function evidenceScoreValues(score: readonly (readonly OcrLine[])[]): number[] {
+  const miss = new Map<number, number>(); // 値 → Π(1 − 確度)。根拠の合算に使う
+  const rivalMiss = new Map<number, number>(); // 同じ計算で、派生の候補だけ確度を割り引いたもの。競合の判定に使う
+  const passes = new Map<number, number>(); // 値 → 現れた読みの数
   for (const lines of score) {
-    const seen = new Set<number>();
+    const best = new Map<number, number>(); // この読みでの値 → 最大の確度
+    const rival = new Map<number, number>();
     for (const l of lines) {
       for (const run of digitRuns([l.text])) {
-        for (const c of scoreCandidates(run)) {
-          const v = Number(c);
-          if (l.confidence >= 80) rival.add(v);
-          if (l.confidence >= 90) seen.add(v);
+        for (const c of scoreCandidateReads(run)) {
+          const v = Number(c.value);
+          if (v < 100) continue;
+          const conf = l.confidence / 100;
+          best.set(v, Math.max(best.get(v) ?? 0, conf));
+          // 同じ読みから出た別解釈（左 4 桁と右 4 桁）どうしが、競合して確定を止めないように、派生は割り引く
+          rival.set(v, Math.max(rival.get(v) ?? 0, conf * (c.derived ? DERIVED_RIVAL_FACTOR : 1)));
         }
       }
     }
-    for (const v of seen) high.set(v, (high.get(v) ?? 0) + 1);
+    for (const [v, c] of best) {
+      miss.set(v, (miss.get(v) ?? 1) * (1 - c));
+      passes.set(v, (passes.get(v) ?? 0) + 1);
+    }
+    for (const [v, c] of rival) rivalMiss.set(v, (rivalMiss.get(v) ?? 1) * (1 - c));
   }
-  const strong = [...high].filter(([, n]) => n >= 2).map(([v]) => v);
-  return strong.length === 1 && [...rival].every((v) => v === strong[0] || isFarOrWeak(v)) ? strong : [];
+  const p = (v: number) => 1 - (miss.get(v) ?? 1);
+  const pRival = (v: number) => 1 - (rivalMiss.get(v) ?? 1);
+  const strong = [...passes].filter(([v, n]) => n >= 2 && p(v) >= 0.97).map(([v]) => v);
+  if (strong.length !== 1) return [];
+  const rival = [...passes.keys()].some((v) => v !== strong[0] && pRival(v) >= 0.8 && !isFragment(String(v), String(strong[0])));
+  return rival ? [] : strong;
 }
-
-/** 競合として数えない値。+0000 のような差分表示や、1〜2 桁の断片 */
-const isFarOrWeak = (v: number): boolean => v < 100;
 
 /** PaddleOCR の読みから結果を組み立てる。曲名で曲を特定し、ノーツ数が分かればスコア・判定・差分を合意で解く */
 export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntry[]): RawResult | null {
@@ -128,5 +146,5 @@ export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntr
   const scoreSet = new Set(scoreReadings.flat().map(Number).filter((n) => Number.isInteger(n)));
   const judge = r.judge ? judgeFromReads(r.judge, scoreSet) : undefined;
   const extras = judge && (judge.pg !== undefined || judge.gr !== undefined) ? { judge } : undefined;
-  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true, crossGroupValues(r.score, r.scoreGroups), mergeReads((r.judge ?? []).flatMap((lines) => parseJudgeReads(lines))), strongScoreValues(r.score));
+  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true, crossGroupValues(r.score, r.scoreGroups), mergeReads((r.judge ?? []).flatMap((lines) => parseJudgeReads(lines))), evidenceScoreValues(r.score));
 }

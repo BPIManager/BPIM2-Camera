@@ -106,8 +106,12 @@ describe("スコア欄の読みが、前処理の違う 2 通りで一致した�
     );
     expect(r?.exScore.value).toBe(3365);
   });
-  it("同じ前処理の読みどうしの一致だけでは確定しない", () => {
+  it("同じ前処理でも、確度が高い読みどうしの一致なら確定する", () => {
     const r = rawFromPaddle({ title, score: [[line("3365", 89)], [line("3365", 90)]], scoreGroups: ["color", "color"], judge: [[]] }, master);
+    expect(r?.exScore.value).toBe(3365);
+  });
+  it("確度の低い読みどうしの一致では確定しない", () => {
+    const r = rawFromPaddle({ title, score: [[line("3365", 60)], [line("3365", 55)]], scoreGroups: ["color", "color"], judge: [[]] }, master);
     expect(r?.exScore.value).toBeNull();
   });
   it("確度が低い読みは数えない", () => {
@@ -221,5 +225,89 @@ describe("確度の高い読みが 2 回そろったとき", () => {
   it("読めた PG と矛盾する値（逆算した GR がノーツ数に合わない）は確定しない", () => {
     const r = rawFromPaddle({ title, score: [[line("3210", 98)], [line("3210", 92)]], scoreGroups: ["color", "color"], judge: [[line("1200", 90)]] }, master);
     expect(r?.exScore.value).toBeNull();
+  });
+});
+
+describe("確度の合算（実機のログ）", () => {
+  const master: SongMasterEntry[] = [{ songId: 5703, title: "The Clown of 24stairs", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1788 }];
+  it("末尾にゴミが付いた 32107(70)・3210(54)・3210C(81) は、3210 に確定する", () => {
+    const r = rawFromPaddle(
+      {
+        title: [line("The Clown of 24stair", 90), line("Yu_Asahina", 100), line("ANOTHER 2 SP 1788", 78)],
+        score: [[line("32107", 70), line("EC", 70)], [line("3210", 54), line("LIC.", 54)], [line("3210C", 81), line("AAA", 81), line("2+00", 81), line("+0855", 62)]],
+        scoreGroups: ["color", "color", "raw"],
+        judge: [[line("L", 53)]],
+      },
+      master,
+    );
+    expect(r?.exScore.value).toBe(3210);
+  });
+  it("5 桁の読みは、先頭・末尾どちらにゴミが付いた場合も候補にする", () => {
+    expect(scoreCandidates("32107")).toEqual(expect.arrayContaining(["3210", "2107"]));
+    expect(scoreCandidates("93695")).toEqual(expect.arrayContaining(["3695", "9369"]));
+  });
+});
+
+describe("桁が抜けただけの読みは、競合として数えない", () => {
+  const master: SongMasterEntry[] = [{ songId: 1867, title: "with you…", playStyle: "SP", difficulty: "ANOTHER", level: 9, notes: 891 }];
+  const title = [line("with you", 94), line("ANOTHER 9", 97), line("0891 NOTES", 90)];
+  it("1779(100)・1779(100)・1779(82)・179(85) は 1779 に確定する", () => {
+    const r = rawFromPaddle({ title, score: [[line("1779", 100)], [line("1779", 100)], [line("1779", 82)], [line("179", 85)]], scoreGroups: ["color", "color", "color", "raw"], judge: [[]] }, master);
+    expect(r?.exScore.value).toBe(1779);
+  });
+  it("同じ桁数で 1 桁違う読み（1778）が確度 85 なら、確定しない", () => {
+    const r = rawFromPaddle({ title, score: [[line("1779", 100)], [line("1779", 100)], [line("1778", 85)]], scoreGroups: ["color", "color", "raw"], judge: [[]] }, master);
+    expect(r?.exScore.value).toBeNull();
+  });
+});
+
+describe("5 桁以上の読み（左の 4 桁も候補にする）", () => {
+  const master: SongMasterEntry[] = [{ songId: 5703, title: "The Clown of 24stairs", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1788 }];
+  const title = [line("The Clown of 24stairs", 96), line("ANOTHER 12", 88), line("SP 1788 NOTES", 88)];
+  it("scoreCandidates: 5 桁なら左と右の 4 桁、6 桁以上でも左と右の 4 桁", () => {
+    expect(scoreCandidates("32107")).toEqual(expect.arrayContaining(["3210", "2107"]));
+    expect(scoreCandidates("432107")).toEqual(expect.arrayContaining(["4321", "2107"]));
+    expect(scoreCandidates("3210")).toEqual(["3210"]);
+  });
+  it("末尾にゴミ（バッジ）が付いた 32107(98) と、3210(95) は、3210 に確定する", () => {
+    const r = rawFromPaddle({ title, score: [[line("32107", 98)], [line("3210", 95)]], scoreGroups: ["color", "color"], judge: [[]] }, master);
+    expect(r?.exScore.value).toBe(3210);
+  });
+  it("末尾にゴミが付いた読みが 2 回そろっても、左の 4 桁は確度を割り引くので、確定しない（根拠が弱い）", () => {
+    const r = rawFromPaddle({ title, score: [[line("32107", 70)], [line("32107", 60)]], scoreGroups: ["color", "color"], judge: [[]] }, master);
+    expect(r?.exScore.value).toBeNull();
+  });
+  it("同じ確度の読みから出た 2 つの解釈（左 4 桁と右 4 桁）は、お互いを競合にしない", () => {
+    const r = rawFromPaddle({ title, score: [[line("93210", 91)], [line("3210", 100)], [line("3210", 92)]], scoreGroups: ["color", "color", "raw"], judge: [[]] }, master);
+    expect(r?.exScore.value).toBe(3210);
+  });
+});
+
+describe("実機のログ（少年は空を辿る）", () => {
+  const master: SongMasterEntry[] = [
+    { songId: 5252, title: "少年は空を辿る", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1729 },
+    { songId: 1, title: "少年A", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1500 },
+    { songId: 2, title: "千年ノ理", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1400 },
+  ];
+  it("曲名の末尾が欠けても（類似度 0.71）、2 位を大きく引き離していれば曲が決まり、3 桁の断片に邪魔されず EX が確定する", () => {
+    const r = rawFromPaddle(
+      {
+        title: [line("少年は空を越", 81), line("Power Of Naturo", 76), line("g NoTES", 76), line("ANOTHER 12", 76)],
+        score: [[line("3379", 83)], [line("3379", 83)], [line("336", 82)], [line("+0047", 80)]],
+        scoreGroups: ["color", "color", "color", "raw"],
+        judge: [[line("1654", 88), line("5", 62)]],
+      },
+      master,
+    );
+    expect(r?.titleText).toBe("少年は空を辿る");
+    expect(r?.exScore.value).toBe(3379);
+  });
+  it("似た曲名どうしで差が小さいときは、確定しない", async () => {
+    const { matchChart } = await import("@/lib/songs/matcher");
+    const similar: SongMasterEntry[] = [
+      { songId: 10, title: "少年は空を辿る", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1729 },
+      { songId: 11, title: "少年は空を渡る", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1600 },
+    ];
+    expect(matchChart(similar, { playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: null, titleText: "少年は空を越" }).confident).toBe(false);
   });
 });

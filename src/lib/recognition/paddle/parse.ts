@@ -103,17 +103,33 @@ export function parseJudgeRows(lines: readonly OcrLine[]): Judge {
   return out;
 }
 
+/** スコア欄の読みから作った候補。派生（余計な桁を落としたもの）は、読みそのものより確度を割り引いて扱う */
+export interface ScoreCandidate {
+  value: string;
+  derived: boolean;
+}
+
 /**
- * スコア欄の読みから候補の数字を作る。先頭に余計な 1 桁が付く読み（`02382`・`52316`）に備え、
- * 先頭の 0 を除いた値と末尾 4 桁も候補にする。正しいかどうかは検算で決める。
+ * スコア欄の読み 1 つから、候補の数字を作る。
+ * 4 桁以下はそのまま。先頭の 0 は除く。5 桁以上は、左の 4 桁（末尾にゴミが付いた読み。NEW RECORD のバッジなど）と、
+ * 右の 4 桁（先頭にゴミが付いた読み）を派生の候補にする。正しいかどうかは、検算や複数の読みの一致で決める。
  */
+export function scoreCandidateReads(run: string): ScoreCandidate[] {
+  const out = new Map<string, boolean>();
+  if (run.length <= 4) out.set(run, false);
+  const add = (v: string) => {
+    if (v.length >= 1 && v.length <= 4 && !out.has(v)) out.set(v, true);
+  };
+  add(run.replace(/^0+/, ""));
+  if (run.length >= 5) {
+    add(run.slice(0, 4));
+    add(run.slice(-4));
+  }
+  return [...out].map(([value, derived]) => ({ value, derived }));
+}
+
 export function scoreCandidates(run: string): string[] {
-  const out = new Set<string>();
-  if (run.length <= 4) out.add(run);
-  const stripped = run.replace(/^0+/, "");
-  if (stripped.length >= 1 && stripped.length <= 4) out.add(stripped);
-  if (run.length === 5) out.add(run.slice(1));
-  return [...out];
+  return scoreCandidateReads(run).map((c) => c.value);
 }
 
 /**

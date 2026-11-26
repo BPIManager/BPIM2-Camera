@@ -26,7 +26,7 @@ export function rawFromRegions(
   crossValues: readonly number[] = [],
   /** 判定表の枠で読めた数字すべて。PG・GR の組み合わせから EX を作り、スコア欄の読みと 1 桁違い以内なら裏付けにする */
   judgePool: readonly JudgeRead[] = [],
-  /** 確度の高い読みが、2 回以上そろった値（前処理の種類は問わない）。PG と矛盾しないときだけ採る */
+  /** 複数の読みが指している値（確度の合算が高いもの。前処理の種類は問わない）。PG と矛盾しないときだけ採る */
   strongValues: readonly number[] = [],
 ): RawResult | null {
   const hints = parseChartHints(titleTokens);
