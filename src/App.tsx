@@ -9,7 +9,8 @@ import type { Draft } from "@/features/result/draft";
 import ResultDrawer from "@/features/result/ResultDrawer";
 import SettingsView from "@/features/settings/SettingsView";
 import { useMaster } from "@/hooks/useMaster";
-import { isIos, isStandalone, useInstallMode } from "@/lib/pwa/install";
+import { useInstallMode } from "@/lib/pwa/install";
+import { useSampleUpload } from "@/hooks/useSampleUpload";
 import { useSettings } from "@/hooks/useSettings";
 import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
 import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
@@ -33,11 +34,10 @@ const TABS = [
 /** 撮影以外のタブは、タブ名のヘッダーを付ける（撮影はカメラ映像を全面に使う） */
 const HEADED_TABS: readonly Tab[] = ["history", "settings"];
 
-const ios = isIos();
-const standalone = isStandalone();
 
 export default function App() {
   const { settings, update } = useSettings();
+  useSampleUpload(settings);
   const { songs } = useMaster();
   const [tab, setTab] = useState<Tab>("camera");
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -74,7 +74,7 @@ export default function App() {
 
   if (!settings.onboarded) {
     return (
-      <Onboarding settings={settings} update={update} viewSize={viewSize} ios={ios} standalone={standalone} />
+      <Onboarding settings={settings} update={update} viewSize={viewSize} />
     );
   }
 

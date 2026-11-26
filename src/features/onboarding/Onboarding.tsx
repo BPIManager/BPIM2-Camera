@@ -9,14 +9,12 @@ interface Props {
   update: (patch: Partial<Settings>) => void;
   /** カメラ表示領域の大きさ。キャリブレーションで同じ縦横比を使う */
   viewSize: Size;
-  ios: boolean;
-  standalone: boolean;
 }
 
 const STEP_COUNT = 6;
 
 /** 初回起動のセットアップ。同意 → サインイン → キャリブレーション → 使い方 → オプション → 改善への協力 */
-export default function Onboarding({ settings, update, viewSize, ios, standalone }: Props) {
+export default function Onboarding({ settings, update, viewSize }: Props) {
   const step = Math.min(Math.max(settings.onboardStep, 0), STEP_COUNT - 1);
   const go = (n: number) => update({ onboardStep: n });
   const next = () => go(step + 1);
@@ -45,7 +43,7 @@ export default function Onboarding({ settings, update, viewSize, ios, standalone
         {step === 1 && <SignInStep onNext={next} />}
         {step === 2 && <CalibrateStep settings={settings} update={update} viewSize={viewSize} onNext={next} />}
         {step === 3 && <HowToStep settings={settings} onNext={next} />}
-        {step === 4 && <OptionsStep settings={settings} update={update} onNext={next} ios={ios} standalone={standalone} />}
+        {step === 4 && <OptionsStep settings={settings} update={update} onNext={next} />}
         {step === 5 && <ConsentStep onDone={(statsConsent) => update({ statsConsent, onboarded: true })} />}
       </div>
     </div>

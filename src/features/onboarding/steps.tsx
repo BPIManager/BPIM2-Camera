@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Check } from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 import BrandMark from "@/components/brand-mark";
 import SyncTargetPicker from "@/components/sync-target-picker";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Avatar from "@/components/ui/avatar";
 import Button from "@/components/ui/button";
 import Label from "@/components/ui/label";
@@ -40,7 +41,10 @@ function Frame({
         )}
         {children}
       </div>
-      <div className="flex flex-col gap-2">{actions}</div>
+      {/* 内容が長くてスクロールするときも、ボタンは下に固定する（親の p-6 を打ち消して端まで背景を敷く） */}
+      <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-col gap-2 bg-background px-6 pt-3 pb-6">
+        {actions}
+      </div>
     </div>
   );
 }
@@ -248,14 +252,37 @@ export function HowToStep({
   return (
     <Frame
       title="撮影のしかた"
-      lead="選んだ写真と同じ構図になるように、さきほど合わせた枠にリザルト画面を重ねて撮影します。曲名は端が見切れても構いません。難易度表記（ANOTHER などとレベル）とノーツ数は、必ず枠の中に収めてください。"
+      lead="選んだ写真と同じ構図になるように、さきほど合わせた枠にリザルト画面を重ねて撮影します。"
       actions={
         <Button size="lg" onClick={onNext}>
           次へ
         </Button>
       }
     >
-      <AlignAnimation layout={layout} aspect={settings.layoutAspect ?? 9 / 16} />
+      <h2 className="text-base font-semibold">撮影のコツ</h2>
+      <Alert variant="destructive">
+        <TriangleAlert />
+        <AlertTitle>楽曲名の読み取り</AlertTitle>
+        <AlertDescription>
+          <p>曲名は端が見切れても構いません。</p>
+          <p>
+            ANOTHER
+            などの難易度表記とレベル、ノーツ数は、枠の外にはみ出さないように収めてください。
+          </p>
+        </AlertDescription>
+      </Alert>
+      <Alert variant="info">
+        <TriangleAlert />
+        <AlertTitle>スコアの読み取り</AlertTitle>
+        <AlertDescription>
+          <p>今回更新したスコアが全て枠の中に入るように収めてください。</p>
+          <p>ベストスコアなど他の文字が写っていても読み取れます</p>
+        </AlertDescription>
+      </Alert>
+      <AlignAnimation
+        layout={layout}
+        aspect={settings.layoutAspect ?? 9 / 16}
+      />
     </Frame>
   );
 }
@@ -282,31 +309,28 @@ function OptionRow({
   );
 }
 
-/** ⑤ カメラロールへの自動保存。BPIM2 への保存は、結果画面の「BPIM2同期」ボタンで 1 曲ずつ行う */
+/** ⑤ 自動読み取り（自動撮影）とカメラロールへの自動保存。BPIM2 への保存は、結果画面の「BPIM2同期」ボタンで 1 曲ずつ行う */
 export function OptionsStep({
   settings,
   update,
   onNext,
-  ios,
-  standalone,
 }: {
   settings: Settings;
   update: (p: Partial<Settings>) => void;
   onNext: () => void;
-  ios: boolean;
-  standalone: boolean;
 }) {
+  const [auto, setAuto] = useState(settings.autoCapture);
   const [save, setSave] = useState(settings.saveToCameraRoll);
   const [syncTarget, setSyncTarget] = useState(settings.syncTarget);
   return (
     <Frame
-      title="保存のしかた"
-      lead="あとから設定で変えられます。BPIM2 へのスコア保存は、結果画面の「BPIM2同期」ボタンで 1 曲ずつ行います。"
+      title="撮影と保存のしかた"
+      lead="あとから設定で変更することもできます。"
       actions={
         <Button
           size="lg"
           onClick={() => {
-            update({ saveToCameraRoll: save, syncTarget });
+            update({ autoCapture: auto, saveToCameraRoll: save, syncTarget });
             onNext();
           }}
         >
@@ -316,24 +340,28 @@ export function OptionsStep({
     >
       <div className="flex flex-col">
         <OptionRow
+          id="opt-auto"
+          label="自動で読み取る"
+          hint="枠に画面を合わせて静止すると、自動で撮影・読み取りします。環境によっては正常に動作しない場合があります"
+        >
+          <Switch id="opt-auto" checked={auto} onCheckedChange={setAuto} />
+        </OptionRow>
+        <OptionRow
           id="opt-roll"
           label="カメラロールへ自動保存"
-          hint="iOS は共有シートで「画像を保存」を選びます"
+          hint="iPhoneの場合は共有シートで「画像を保存」をタップ"
         >
           <Switch id="opt-roll" checked={save} onCheckedChange={setSave} />
         </OptionRow>
         <div className="flex flex-col gap-2 py-3">
           <Label>BPIM2 の同期先（既定）</Label>
-          <p className="text-xs text-muted-foreground">アーケードの最新バージョンか、INFINITAS か。結果画面で、1 件ごとに変えられます</p>
+          <p className="text-xs text-muted-foreground">
+            デフォルトの同期先を選択してください。
+            (結果画面で1件ごとに変えることもできます)
+          </p>
           <SyncTargetPicker value={syncTarget} onChange={setSyncTarget} />
         </div>
       </div>
-      {ios && !standalone && (
-        <p className="text-sm text-muted-foreground">
-          Safari
-          の共有ボタンから「ホーム画面に追加」すると、カメラの許可確認が減ります。
-        </p>
-      )}
     </Frame>
   );
 }
@@ -359,12 +387,12 @@ export function ConsentStep({
       }
     >
       <ul className="flex list-disc flex-col gap-3 pl-5 text-sm leading-relaxed text-muted-foreground">
-        <li>スコアの文字と曲名の判定結果を、文字と画像で保存します。</li>
+        <li>曲名及びスコアの判定結果を文字と画像で保存します。</li>
         <li>
-          スコアや曲名の自動判定に失敗したときだけ、あなたが入力した正しい曲名・スコアを共有します。
+          スコアや曲名の自動判定に失敗した場合、手動で入力された正しい曲名・スコアを共有します。
         </li>
         <li>
-          誰がアップロードしたかは分からない形で保存します（ただし、画像に映り込んだ内容は別です）。
+          誰がアップロードしたか分からない形で保存されます（画像への映り込みを除く）。
         </li>
       </ul>
       <p className="text-xs text-muted-foreground">
