@@ -1,4 +1,8 @@
+export type PlaySide = "1P" | "2P";
+
 export interface Settings {
+  /** どちら側でプレーするか。リザルト画面のレイアウトが左右反転するため読み取りに使う */
+  playSide: PlaySide;
   autoCapture: boolean;
   saveToCameraRoll: boolean;
   shareImage: "photo" | "card";
@@ -14,6 +18,7 @@ const KEY = "bpim2-camera:settings";
 
 export function defaultSettings(): Settings {
   return {
+    playSide: "1P",
     autoCapture: true,
     saveToCameraRoll: true,
     shareImage: "photo",
