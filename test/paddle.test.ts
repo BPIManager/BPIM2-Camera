@@ -83,7 +83,7 @@ describe("判定の枠が数字だけのとき", () => {
       {
         title: [line("with you", 99), line("ANOTHER 9"), line("0891 NOTES")],
         score: [[line("1779")]],
-        judge: [nums(["889", 0], ["7", 30], ["0", 60])],
+        judge: [[line("889", 90, 0), line("7", 60, 30), line("0", 55, 60)]],
       },
       [{ songId: 1, title: "with you…", playStyle: "SP", difficulty: "ANOTHER", level: 9, notes: 891 }],
     );
@@ -154,5 +154,22 @@ describe("実機のログ（モニター越しの撮影）", () => {
     const h = parseChartHints([{ text: "ANOTHERに", confidence: 80 }, { text: "SP 1927 NG", confidence: 80 }]);
     expect(h.difficulty).toBe("ANOTHER");
     expect(h.notes).toBe(1927);
+  });
+});
+
+describe("判定表の PG・GR から計算した EX が、スコア欄の読みと 1 桁違いのとき", () => {
+  const master: SongMasterEntry[] = [{ songId: 5605, title: "二人ノ廃城幽踊宴", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1927 }];
+  const title = [line("二人ノ廃城幽踊宴", 92), line("ANOTHER 2 SP/1927 NG", 93)];
+  it("スコア欄が 3407 と読まれても、判定表（1552・333）から 3437 に確定する", () => {
+    const r = rawFromPaddle({ title, score: [[line("3407", 54)]], scoreGroups: ["raw"], judge: [[line("1552", 86), line("333", 79), line("11", 67)]] }, master);
+    expect(r?.exScore.value).toBe(3437);
+  });
+  it("PG＋GR がノーツ数に届かない組み合わせは使わない（偶然の一致を避ける）", () => {
+    const r = rawFromPaddle({ title, score: [[line("3407", 54)]], scoreGroups: ["raw"], judge: [[line("1352", 86), line("11", 67)]] }, master);
+    expect(r?.exScore.value).toBeNull();
+  });
+  it("スコア欄の読みと 2 桁以上違うなら確定しない", () => {
+    const r = rawFromPaddle({ title, score: [[line("3017", 54)]], scoreGroups: ["raw"], judge: [[line("1552", 86), line("333", 79)]] }, master);
+    expect(r?.exScore.value).toBeNull();
   });
 });

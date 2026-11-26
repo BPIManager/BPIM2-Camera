@@ -1,3 +1,4 @@
+import type { JudgeRead } from "../judgeRead";
 import type { OcrLine } from "./engine";
 import type { Observations } from "../consensus/engine";
 
@@ -119,11 +120,13 @@ export function scoreCandidates(run: string): string[] {
  * ラベルが枠の外にあり、数字だけが並ぶ判定表の読み。斜めに写ると行の位置が大きく重なるので、
  * 順序には頼らず、読めた数字をすべて返す（重複は除く）。
  */
-export function parseJudgeNumbers(lines: readonly OcrLine[]): number[] {
-  const out = new Set<number>();
+export function parseJudgeReads(lines: readonly OcrLine[]): JudgeRead[] {
+  const best = new Map<number, number>();
   for (const l of lines) {
     const n = trailingNumber(l.text);
-    if (n !== null) out.add(n);
+    if (n !== null) best.set(n, Math.max(best.get(n) ?? 0, l.confidence));
   }
-  return [...out];
+  return [...best].map(([n, conf]) => ({ n, conf }));
 }
+
+export const parseJudgeNumbers = (lines: readonly OcrLine[]): number[] => parseJudgeReads(lines).map((r) => r.n);

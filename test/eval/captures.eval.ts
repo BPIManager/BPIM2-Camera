@@ -39,9 +39,9 @@ import { rawFromPaddle } from "@/lib/recognition/paddle/fromPaddle";
 /** 実機で撮った保存画像から、確定まで通しで確かめる（正解は目視） */
 it("captures: end to end", async () => {
   const master = JSON.parse(readFileSync("internal/master.local.json", "utf8")).songs;
-  const truth: Record<string, number> = { "20261126060215": 1779, "20261126060242": 3695, "20261126060255": 3695, "20261126060306": 3953, "20261126060316": 3953 };
+  const truth: Record<string, number> = { "20261126060215": 1779, "20261126060242": 3695, "20261126060255": 3695, "20261126060306": 3953, "20261126060316": 3953, "20261126061944": 3307, "20261126061917": 3437, "20261126062237": 4164 };
   const engine = await createNodeEngine("small");
-  const read = async (file: string, width: number, mask: "cyanFill" | "cyanFillLoose" | null = null) => {
+  const read = async (file: string, width: number, mask: "cyanFill" | "cyanFillLoose" | "gray" | null = null) => {
     let png: Buffer;
     if (!mask) png = await sharp(readFileSync(path.join(DIR, file))).resize({ width }).png().toBuffer();
     else {
@@ -51,7 +51,7 @@ it("captures: end to end", async () => {
     return engine.readLines(png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer);
   };
   for (const [id, ex] of Object.entries(truth)) {
-    const rd = { title: await read(id + "_title.jpg", 900), score: [await read(id + "_score.jpg", 700, "cyanFill"), await read(id + "_score.jpg", 700, "cyanFillLoose"), await read(id + "_score.jpg", 400)], judge: [await read(id + "_judge.jpg", 700), await read(id + "_judge.jpg", 1200), await read(id + "_judge.jpg", 1600)] };
+    const rd = { title: [...(await read(id + "_title.jpg", 1200, "gray")), ...(await read(id + "_title.jpg", 900))], score: [await read(id + "_score.jpg", 700, "cyanFill"), await read(id + "_score.jpg", 700, "cyanFillLoose"), await read(id + "_score.jpg", 400)], judge: [await read(id + "_judge.jpg", 700), await read(id + "_judge.jpg", 1200), await read(id + "_judge.jpg", 1600)] };
     const fmt = (ls: { text: string; confidence: number }[]) => ls.map((l) => l.text + "(" + Math.round(l.confidence) + ")").join(" | ");
     console.log("  title:", fmt(rd.title));
     console.log("  score:", rd.score.map(fmt).join(" // "));

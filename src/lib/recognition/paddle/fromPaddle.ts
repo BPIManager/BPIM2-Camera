@@ -5,7 +5,8 @@ import { rawFromRegions } from "../fromRegions";
 import { parseChartHints, type OcrToken } from "../tokens";
 import type { OcrLine } from "./engine";
 import type { Observations } from "../consensus/engine";
-import { digitRuns, parseJudgeNumbers, parseJudgeRows, scoreCandidates } from "./parse";
+import { isReliableGr, type JudgeRead } from "../judgeRead";
+import { digitRuns, parseJudgeReads, parseJudgeRows, scoreCandidates } from "./parse";
 
 export interface PaddleReadings {
   /** 曲名・譜面の枠の行 */
@@ -46,6 +47,13 @@ export function bestTitleLine(lines: readonly OcrLine[], master: readonly SongMa
 
 type Judge = NonNullable<Observations["judge"]>;
 
+/** 同じ数字の読みをまとめる（確度は最大） */
+export function mergeReads(reads: readonly JudgeRead[]): JudgeRead[] {
+  const m = new Map<number, number>();
+  for (const r of reads) m.set(r.n, Math.max(m.get(r.n) ?? 0, r.conf));
+  return [...m].map(([n, conf]) => ({ n, conf }));
+}
+
 /**
  * 判定表の読みから、PG・GR を決める。ラベル（PGREAT・GREAT）が読めていればそれに従う。
  * 数字だけの枠のときは、読めた数字をすべて集め、「PG × 2 ＋ GR ＝ スコア欄の読み」になる組み合わせ（PG > GR）が
@@ -56,9 +64,9 @@ export function judgeFromReads(reads: readonly (readonly OcrLine[])[], scores: R
     const labeled = parseJudgeRows(lines);
     if (labeled.pg !== undefined && labeled.gr !== undefined) return labeled;
   }
-  const pool = [...new Set(reads.flatMap((lines) => parseJudgeNumbers(lines)))];
+  const pool = mergeReads(reads.flatMap((lines) => parseJudgeReads(lines)));
   const pairs: { pg: number; gr: number }[] = [];
-  for (const pg of pool) for (const gr of pool) if (pg >= 10 && pg > gr && scores.has(pg * 2 + gr)) pairs.push({ pg, gr });
+  for (const pg of pool) for (const gr of pool) if (pg.n >= 10 && pg.n > gr.n && isReliableGr(gr) && scores.has(pg.n * 2 + gr.n)) pairs.push({ pg: pg.n, gr: gr.n });
   if (pairs.length === 1) return pairs[0];
   // 裏付けのない読み。EX は作らない
   return undefined;
@@ -94,5 +102,5 @@ export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntr
   const scoreSet = new Set(scoreReadings.flat().map(Number).filter((n) => Number.isInteger(n)));
   const judge = r.judge ? judgeFromReads(r.judge, scoreSet) : undefined;
   const extras = judge && (judge.pg !== undefined || judge.gr !== undefined) ? { judge } : undefined;
-  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true, crossGroupValues(r.score, r.scoreGroups));
+  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true, crossGroupValues(r.score, r.scoreGroups), mergeReads((r.judge ?? []).flatMap((lines) => parseJudgeReads(lines))));
 }

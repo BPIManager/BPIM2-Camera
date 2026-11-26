@@ -15,7 +15,14 @@ const SCORE_PASSES: readonly { width: number; mask: Variant | null }[] = [
   { width: 700, mask: "cyanFillLoose" },
   { width: 400, mask: null },
 ];
-const TITLE_WIDTH = 900;
+/**
+ * 曲名の枠は、まずグレースケールで濃淡を伸ばして読む（色つきの文字や背景に強い）。
+ * 難易度や曲名が取れなければ、元の画像でも読み直す
+ */
+const TITLE_PASSES: readonly { width: number; mask: Variant | null }[] = [
+  { width: 1200, mask: "gray" },
+  { width: 900, mask: null },
+];
 /** 判定表は小さい数字なので、確定しなければ拡大率を上げて読み直す */
 const JUDGE_WIDTHS = [700, 1200, 1600] as const;
 
@@ -43,7 +50,12 @@ export class PaddleRecognizer implements Recognizer {
     if (!input.regions) return this.fallback ? this.fallback.recognize(input) : null;
     const r = input.regions;
     const t0 = performance.now();
-    const title = await this.engine.readLines(await encode(r.title, TITLE_WIDTH));
+    const title: OcrLine[] = await this.engine.readLines(await encode(r.title, TITLE_PASSES[0].width, TITLE_PASSES[0].mask));
+    // 難易度も曲名も取れなければ、元の画像でも曲名の枠を読み直す
+    const first = rawFromPaddle({ title, score: [], judge: [] }, this.getMaster());
+    if (!first || first.difficulty === null || first.titleText === null) {
+      title.push(...(await this.engine.readLines(await encode(r.title, TITLE_PASSES[1].width, TITLE_PASSES[1].mask))));
+    }
     const judge: OcrLine[][] = [await this.engine.readLines(await encode(r.judge, JUDGE_WIDTHS[0]))];
     const score: OcrLine[][] = [];
     const scoreGroups: ("color" | "raw")[] = [];

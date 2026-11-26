@@ -2,6 +2,8 @@ import type { RawResult } from "@/lib/domain/types";
 import { matchChart } from "@/lib/songs/matcher";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { decideExScore, type Observations } from "./consensus/engine";
+import { isReliableGr, type JudgeRead } from "./judgeRead";
+import { editDistance } from "@/lib/songs/normalize";
 import { guessTitle } from "./fromTokens";
 import { voteScore } from "./scoreVote";
 import { parseChartHints, type OcrToken } from "./tokens";
@@ -22,6 +24,8 @@ export function rawFromRegions(
   requireConsensus = false,
   /** 前処理の違う複数の読みで、確度の高い読みが一致した値。合意がないときの代わりに、1 つに決まれば採る */
   crossValues: readonly number[] = [],
+  /** 判定表の枠で読めた数字すべて。PG・GR の組み合わせから EX を作り、スコア欄の読みと 1 桁違い以内なら裏付けにする */
+  judgePool: readonly JudgeRead[] = [],
 ): RawResult | null {
   const hints = parseChartHints(titleTokens);
   const titleText = japaneseTitle?.trim() || guessTitle(titleTokens);
@@ -49,8 +53,9 @@ export function rawFromRegions(
     notes !== null && extras
       ? decideExScore({ notes, score: [...new Set(scoreReadings.flatMap((r) => r.map(Number).filter((n) => Number.isInteger(n))))], ...extras })
       : null;
-  const cross = notes === null ? [] : [...new Set(crossValues)].filter((v) => v >= 100 && v <= notes * 2);
-  const exValue = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? (cross.length === 1 ? cross[0] : null) : vote.value;
+  const scoreNumbers = [...new Set(scoreReadings.flatMap((rd) => rd.map(Number).filter((n) => Number.isInteger(n))))];
+  const fallback = notes === null ? [] : [...new Set([...crossValues.filter((v) => v >= 100 && v <= notes * 2), ...approximatePairs(judgePool, notes, scoreNumbers)])];
+  const exValue = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? (fallback.length === 1 ? fallback[0] : null) : vote.value;
   const exCandidates = exValue !== null ? [] : [...new Set([...(consensus?.ranked.map((c) => c.value) ?? []), ...vote.candidates])].slice(0, 3);
   if (hints.difficulty === null && hints.notes === null && titleText === null && vote.candidates.length === 0) return null;
 
@@ -79,4 +84,24 @@ export function chartResolvedByHints(titleTokens: readonly OcrToken[], master: r
   const hints = parseChartHints(titleTokens);
   if (hints.notes === null || hints.difficulty === null || hints.level === null) return false;
   return matchChart(master, { ...hints, titleText: null }).confident;
+}
+
+/**
+ * 判定表の枠で読めた数字から、PG・GR の組み合わせの EX（PG×2＋GR）を作り、スコア欄の読みと 1 桁違い以内のものを返す。
+ * 偶然の一致を避けるため、PG＋GR はノーツ数の 90〜100%、PG > GR を条件にする（実際のリザルトでは、
+ * GOOD 以下はノーツ数の 1 割に満たないことがほとんど）。
+ */
+export function approximatePairs(pool: readonly JudgeRead[], notes: number, scores: readonly number[]): number[] {
+  const out = new Set<number>();
+  for (const pgRead of pool) {
+    for (const grRead of pool) {
+      const pg = pgRead.n;
+      const gr = grRead.n;
+      const sum = pg + gr;
+      if (pg < 100 || pg <= gr || !isReliableGr(grRead) || sum > notes || sum < notes * 0.9) continue;
+      const ex = pg * 2 + gr;
+      if (scores.some((s) => editDistance(String(s), String(ex)) <= 1)) out.add(ex);
+    }
+  }
+  return [...out];
 }
