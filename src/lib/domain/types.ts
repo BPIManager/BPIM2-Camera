@@ -58,6 +58,8 @@ export interface RawResult {
   djLevel: DjLevel | null;
   useOption: string | null;
   isNewRecord: boolean;
+  /** EX の確定に至らなかったときの候補（確度順、最大 3 件） */
+  exCandidates?: number[];
 }
 
 /** 曲確定後の結果。履歴・シェア・統計送信の単位 */
