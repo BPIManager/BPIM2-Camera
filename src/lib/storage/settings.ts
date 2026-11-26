@@ -1,5 +1,5 @@
 import { isValidRect } from "@/lib/vision/guideEdit";
-import type { CustomGuides } from "@/lib/vision/guides";
+import { GUIDE_KEYS, type CustomGuides, type GuideLayout, type NormRect } from "@/lib/vision/guides";
 
 export type PlaySide = "1P" | "2P";
 
@@ -60,12 +60,15 @@ export function saveSettings(s: Settings, storage: Pick<Storage, "getItem" | "se
   }
 }
 
-/** 壊れた枠や範囲外の枠は捨てて既定値に戻す */
+/** 壊れた枠や範囲外の枠は捨てて既定値に戻す。有効な枠だけを残す（古い設定の 2 枠でも読める） */
 function sanitizeGuides(g: unknown): CustomGuides {
   const out: CustomGuides = {};
   for (const side of ["1P", "2P"] as const) {
-    const l = (g as CustomGuides | undefined)?.[side];
-    if (l && isValidRect(l.score) && isValidRect(l.title)) out[side] = l;
+    const l = (g as Record<string, Record<string, unknown> | undefined> | undefined)?.[side];
+    if (!l) continue;
+    const valid: Partial<GuideLayout> = {};
+    for (const key of GUIDE_KEYS) if (isValidRect(l[key])) valid[key] = l[key] as NormRect;
+    if (Object.keys(valid).length > 0) out[side] = valid;
   }
   return out;
 }
