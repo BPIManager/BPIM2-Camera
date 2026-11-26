@@ -1,0 +1,9 @@
+{
+  "note": "正解ラベル付きサンプル。image は SAMPLE_DIR（既定 D:/camera-example）からの相対名。region は画像に対する割合で、スコアの数字を含む範囲",
+  "samples": [
+    { "image": "1p-preview (1).webp", "digits": "3365", "region": { "x": 0.32, "y": 0.43, "width": 0.19, "height": 0.055 } },
+    { "image": "1p-preview.webp", "digits": "1796", "region": { "x": 0.32, "y": 0.43, "width": 0.19, "height": 0.055 } },
+    { "image": "1p-preview (2).webp", "digits": "3304", "region": { "x": 0.29, "y": 0.42, "width": 0.17, "height": 0.055 } },
+    { "image": "1p-preview (3).webp", "digits": "3451", "region": { "x": 0.27, "y": 0.4, "width": 0.18, "height": 0.055 } }
+  ]
+}
