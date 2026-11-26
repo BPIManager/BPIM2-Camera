@@ -46,16 +46,18 @@ export class PaddleRecognizer implements Recognizer {
     const title = await this.engine.readLines(await encode(r.title, TITLE_WIDTH));
     const judge: OcrLine[][] = [await this.engine.readLines(await encode(r.judge, JUDGE_WIDTHS[0]))];
     const score: OcrLine[][] = [];
+    const scoreGroups: ("color" | "raw")[] = [];
     let raw: RawResult | null = null;
     for (const pass of SCORE_PASSES) {
       score.push(await this.engine.readLines(await encode(r.score, pass.width, pass.mask)));
-      raw = rawFromPaddle({ title, score, judge }, this.getMaster());
+      scoreGroups.push(pass.mask ? "color" : "raw");
+      raw = rawFromPaddle({ title, score, scoreGroups, judge }, this.getMaster());
       if (raw?.exScore.value != null) break;
     }
     for (const w of JUDGE_WIDTHS.slice(1)) {
       if (raw?.exScore.value != null) break;
       judge.push(await this.engine.readLines(await encode(r.judge, w)));
-      raw = rawFromPaddle({ title, score, judge }, this.getMaster());
+      raw = rawFromPaddle({ title, score, scoreGroups, judge }, this.getMaster());
     }
     logOcr({
       title,

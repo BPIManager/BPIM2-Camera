@@ -90,3 +90,28 @@ describe("判定の枠が数字だけのとき", () => {
     expect(r?.exScore.value).toBeNull();
   });
 });
+
+describe("スコア欄の読みが、前処理の違う 2 通りで一致したとき", () => {
+  const master: SongMasterEntry[] = [{ songId: 9, title: "UNDO THE NIGHT", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1787 }];
+  const title = [line("UNDO THENIGHT", 94), line("ANOTHER 12", 88), line("SP/1787 NOTE", 88)];
+  it("実機のログ（色抜き 3365・緩い条件 3380・元画像 3365）は、3365 に確定する", () => {
+    const r = rawFromPaddle(
+      {
+        title,
+        score: [[line("3365", 89)], [line("3380", 77)], [line("3365", 96), line("AAA+0108", 79)]],
+        scoreGroups: ["color", "color", "raw"],
+        judge: [[line("1S91", 58), line("18", 58)]],
+      },
+      master,
+    );
+    expect(r?.exScore.value).toBe(3365);
+  });
+  it("同じ前処理の読みどうしの一致だけでは確定しない", () => {
+    const r = rawFromPaddle({ title, score: [[line("3365", 89)], [line("3365", 90)]], scoreGroups: ["color", "color"], judge: [[]] }, master);
+    expect(r?.exScore.value).toBeNull();
+  });
+  it("確度が低い読みは数えない", () => {
+    const r = rawFromPaddle({ title, score: [[line("3365", 89)], [line("3365", 60)]], scoreGroups: ["color", "raw"], judge: [[]] }, master);
+    expect(r?.exScore.value).toBeNull();
+  });
+});

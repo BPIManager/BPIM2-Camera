@@ -12,6 +12,8 @@ export interface PaddleReadings {
   title: readonly OcrLine[];
   /** スコア欄の読み。前処理ごとに 1 件 */
   score: readonly (readonly OcrLine[])[];
+  /** score の各読みの前処理の種類。色で抜き出した読み（color）と元の画像の読み（raw）は、別の読みとして数える */
+  scoreGroups?: readonly ("color" | "raw")[];
   /** 判定表の読み。拡大率を変えた読みが複数あってよい */
   judge?: readonly (readonly OcrLine[])[];
 }
@@ -62,6 +64,24 @@ export function judgeFromReads(reads: readonly (readonly OcrLine[])[], scores: R
   return undefined;
 }
 
+/** 確度の高い読みを、前処理の種類が 2 つ以上にまたがって一致した値にする */
+const CROSS_CONFIDENCE = 80;
+export function crossGroupValues(score: readonly (readonly OcrLine[])[], groups: readonly string[] | undefined): number[] {
+  if (!groups) return [];
+  const byGroup = new Map<string, Set<number>>();
+  score.forEach((lines, i) => {
+    const set = byGroup.get(groups[i]) ?? new Set<number>();
+    for (const l of lines) {
+      if (l.confidence < CROSS_CONFIDENCE) continue;
+      for (const run of digitRuns([l.text])) for (const c of scoreCandidates(run)) set.add(Number(c));
+    }
+    byGroup.set(groups[i], set);
+  });
+  const sets = [...byGroup.values()];
+  if (sets.length < 2) return [];
+  return [...sets[0]].filter((v) => sets.slice(1).every((s) => s.has(v)));
+}
+
 /** PaddleOCR の読みから結果を組み立てる。曲名で曲を特定し、ノーツ数が分かればスコア・判定・差分を合意で解く */
 export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntry[]): RawResult | null {
   const titleTokens: OcrToken[] = r.title.flatMap((l) => l.text.split(/\s+/).filter(Boolean).map((text) => ({ text, confidence: l.confidence })));
@@ -69,5 +89,5 @@ export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntr
   const scoreSet = new Set(scoreReadings.flat().map(Number).filter((n) => Number.isInteger(n)));
   const judge = r.judge ? judgeFromReads(r.judge, scoreSet) : undefined;
   const extras = judge && (judge.pg !== undefined || judge.gr !== undefined) ? { judge } : undefined;
-  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true);
+  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true, crossGroupValues(r.score, r.scoreGroups));
 }

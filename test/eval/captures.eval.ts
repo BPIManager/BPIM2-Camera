@@ -56,7 +56,7 @@ it("captures: end to end", async () => {
     console.log("  title:", fmt(rd.title));
     console.log("  score:", rd.score.map(fmt).join(" // "));
     console.log("  judge:", rd.judge.map(fmt).join(" // "));
-    const raw = rawFromPaddle(rd, master);
+    const raw = rawFromPaddle({ ...rd, scoreGroups: ["color", "color", "raw"] }, master);
     console.log(id, "正解", ex, "→", raw?.exScore.value, raw?.titleText, raw?.notes, raw?.difficulty, raw?.level, raw?.exScore.value === ex ? "○" : raw?.exScore.value == null ? "未確定" : "×誤り");
   }
   await engine.destroy();

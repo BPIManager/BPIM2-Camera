@@ -20,6 +20,8 @@ export function rawFromRegions(
   extras?: Omit<Observations, "notes" | "score">,
   /** true なら、独立した読みの合意でしか EX を確定しない（スコア欄の読みだけの多数決では確定しない） */
   requireConsensus = false,
+  /** 前処理の違う複数の読みで、確度の高い読みが一致した値。合意がないときの代わりに、1 つに決まれば採る */
+  crossValues: readonly number[] = [],
 ): RawResult | null {
   const hints = parseChartHints(titleTokens);
   const titleText = japaneseTitle?.trim() || guessTitle(titleTokens);
@@ -37,7 +39,8 @@ export function rawFromRegions(
     notes !== null && extras
       ? decideExScore({ notes, score: [...new Set(scoreReadings.flatMap((r) => r.map(Number).filter((n) => Number.isInteger(n))))], ...extras })
       : null;
-  const exValue = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? null : vote.value;
+  const cross = notes === null ? [] : [...new Set(crossValues)].filter((v) => v >= 100 && v <= notes * 2);
+  const exValue = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? (cross.length === 1 ? cross[0] : null) : vote.value;
   const exCandidates = exValue !== null ? [] : [...new Set([...(consensus?.ranked.map((c) => c.value) ?? []), ...vote.candidates])].slice(0, 3);
   if (hints.difficulty === null && hints.notes === null && titleText === null && vote.candidates.length === 0) return null;
 

@@ -3,6 +3,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { describe, it } from "vitest";
 import type { OcrLine } from "@/lib/recognition/paddle/engine";
+import { maskVariant } from "@/lib/recognition/ocr/preprocess";
 import { rawFromPaddle } from "@/lib/recognition/paddle/fromPaddle";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { createNodeEngine } from "./paddleNode";
@@ -25,14 +26,21 @@ describe("paddle E2E", () => {
       if (!l.digits || !l.boxes || !l.size) continue;
       const S = l.size;
       const base = await sharp(path.join(DIR, l.image)).rotate().resize({ width: S.w, height: S.h, fit: "fill" }).png().toBuffer();
-      const crop = async (r: Box, width: number) => {
+      const crop = async (r: Box, width: number, mask: "cyanFill" | "cyanFillLoose" | null = null) => {
         const left = Math.min(S.w - 2, Math.max(0, Math.round(r.x0))), top = Math.min(S.h - 2, Math.max(0, Math.round(r.y0)));
         const w = Math.max(2, Math.min(S.w - left, Math.round(r.x1) - left)), h = Math.max(2, Math.min(S.h - top, Math.round(r.y1) - top));
-        const png = await sharp(base).extract({ left, top, width: w, height: h }).resize({ width }).png().toBuffer();
+        let png = await sharp(base).extract({ left, top, width: w, height: h }).resize({ width }).png().toBuffer();
+        if (mask) {
+          const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+          png = await sharp(Buffer.from(maskVariant(new Uint8ClampedArray(data), mask)), { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+        }
         return engine.readLines(png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer);
       };
       const b = union(l.boxes), h = b.y1 - b.y0;
-      const score = [await crop({ x0: b.x0 - 1.5 * h, y0: b.y0 - 0.8 * h, x1: b.x1 + 1.5 * h, y1: b.y1 + 0.8 * h }, 400), await crop({ x0: b.x0 - 1.5 * h, y0: b.y0 - 0.8 * h, x1: b.x1 + 1.5 * h, y1: b.y1 + 0.8 * h }, 1100)];
+      const sr = { x0: b.x0 - 1.5 * h, y0: b.y0 - 0.8 * h, x1: b.x1 + 1.5 * h, y1: b.y1 + 0.8 * h };
+      // 前回スコア（左隣）が入るように、スコア欄の枠は左に広めに取る
+      const wide = { ...sr, x0: b.x0 - 5 * h };
+      const score = [await crop(wide, 700, "cyanFill"), await crop(wide, 700, "cyanFillLoose"), await crop(wide, 400)];
       // 曲名の枠: 全体画像から難易度・ノーツ数の行を探し、その周りを切り出す
       const full = await engine.readLines(base.buffer.slice(base.byteOffset, base.byteOffset + base.byteLength) as ArrayBuffer);
       const meta = full.filter((x: OcrLine) => META.test(x.text)).sort((a, c) => c.box.y - a.box.y)[0];
@@ -43,7 +51,7 @@ describe("paddle E2E", () => {
         const p = union(f.pg.boxes), g = f.gr?.boxes ? union(f.gr.boxes) : p, ph = p.y1 - p.y0;
         judge = await crop({ x0: p.x0 - 8 * ph, y0: p.y0 - 0.6 * ph, x1: p.x1 + ph, y1: g.y1 + 4.5 * ph }, 700);
       }
-      const raw = rawFromPaddle({ title, score, judge: judge ? [judge] : undefined }, master);
+      const raw = rawFromPaddle({ title, score, scoreGroups: ["color", "color", "raw"], judge: judge ? [judge] : undefined }, master);
       t.n++;
       const v = raw?.exScore.value ?? null;
       const status = v === null ? "未確定" : String(v) === l.digits ? "確定○" : "確定×";
