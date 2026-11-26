@@ -1,7 +1,8 @@
 import type { RawResult } from "@/lib/domain/types";
 import type { SongMasterEntry } from "@/lib/songs/types";
+import { matchChart } from "@/lib/songs/matcher";
 import { rawFromRegions } from "../fromRegions";
-import type { OcrToken } from "../tokens";
+import { parseChartHints, type OcrToken } from "../tokens";
 import type { OcrLine } from "./engine";
 import { digitRuns, parseJudgeRows, parseRankGap, scoreCandidates } from "./parse";
 
@@ -23,6 +24,23 @@ export function pickTitleLine(lines: readonly OcrLine[]): string | null {
   return best ? best.text.trim() : null;
 }
 
+/**
+ * 曲名の行を、曲データとの照合で選ぶ。曲名の下にはアーティスト名などもあり、見た目だけでは選べない。
+ * 難易度・レベルで絞った譜面のうち、どの行が最も曲名に似ているかで決める。照合できなければ見た目で選ぶ。
+ */
+export function bestTitleLine(lines: readonly OcrLine[], master: readonly SongMasterEntry[]): string | null {
+  const tokens = lines.flatMap((l) => l.text.split(/s+/).filter(Boolean).map((text) => ({ text, confidence: l.confidence })));
+  const hints = parseChartHints(tokens);
+  let best: { text: string; score: number } | null = null;
+  for (const l of lines) {
+    if (META.test(l.text) || !/[A-Za-z぀-ヿ一-鿿]{2}/.test(l.text)) continue;
+    const m = matchChart(master, { ...hints, titleText: l.text.trim() });
+    const score = m.candidates[0]?.score ?? 0;
+    if (!best || score > best.score) best = { text: l.text.trim(), score };
+  }
+  return best && best.score >= 0.6 ? best.text : pickTitleLine(lines);
+}
+
 /** PaddleOCR の読みから結果を組み立てる。曲名で曲を特定し、ノーツ数が分かればスコア・判定・差分を合意で解く */
 export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntry[]): RawResult | null {
   const titleTokens: OcrToken[] = r.title.flatMap((l) => l.text.split(/\s+/).filter(Boolean).map((text) => ({ text, confidence: l.confidence })));
@@ -31,5 +49,5 @@ export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntr
   const rankGap = r.rank ? parseRankGap(r.rank.map((l) => l.text)) : undefined;
   const hasExtras = (judge && (judge.pg !== undefined || judge.gr !== undefined)) || rankGap;
   const extras = hasExtras ? { ...(judge ? { judge } : {}), ...(rankGap ? { rankGap } : {}) } : undefined;
-  return rawFromRegions(titleTokens, scoreReadings, master, pickTitleLine(r.title) ?? undefined, extras);
+  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true);
 }

@@ -47,7 +47,11 @@ export function matchChart(master: readonly SongMasterEntry[], q: MatchQuery): M
     .sort((a, b) => b.score - a.score);
   const top = scored.slice(0, 3);
   const second = scored[1]?.score ?? 0;
-  const confident = !!q.titleText && top[0].score >= CONFIDENT_SCORE && top[0].score - second >= 0.1;
+  const confident =
+    !!q.titleText &&
+    ((top[0].score >= CONFIDENT_SCORE && top[0].score - second >= 0.1) ||
+      // 難易度とレベルで 1 件に絞れていれば、曲名が少し崩れていても確定してよい
+      (narrowed.length === 1 && q.difficulty !== null && q.level !== null && top[0].score >= 0.6));
   return { candidates: top, confident };
 }
 

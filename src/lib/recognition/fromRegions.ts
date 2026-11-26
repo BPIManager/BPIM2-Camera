@@ -18,10 +18,17 @@ export function rawFromRegions(
   japaneseTitle?: string,
   /** スコア欄以外の独立した読み（ジャッジ表・DJ LEVEL 行の差分・ベストとの差分）。あれば合意で EX を決める */
   extras?: Omit<Observations, "notes" | "score">,
+  /** true なら、独立した読みの合意でしか EX を確定しない（スコア欄の読みだけの多数決では確定しない） */
+  requireConsensus = false,
 ): RawResult | null {
   const hints = parseChartHints(titleTokens);
   const titleText = japaneseTitle?.trim() || guessTitle(titleTokens);
-  const match = matchChart(master, { ...hints, titleText });
+  // レベルの読み違い（II を 1 と読むなど）に備え、確定しなければレベルを外して照合し直す
+  let match = matchChart(master, { ...hints, titleText });
+  if (!match.confident && titleText) {
+    const relaxed = matchChart(master, { ...hints, level: null, notes: null, titleText });
+    if (relaxed.confident) match = relaxed;
+  }
   // 曲名の弱い一致で範囲を狭めると正しい EX まで除外するので、確定した譜面のノーツ数だけを使う
   const notes = hints.notes ?? (match.confident ? match.candidates[0].entry.notes : null);
   const vote = voteScore(scoreReadings, notes);
@@ -30,7 +37,7 @@ export function rawFromRegions(
     notes !== null && extras
       ? decideExScore({ notes, score: [...new Set(scoreReadings.flatMap((r) => r.map(Number).filter((n) => Number.isInteger(n))))], ...extras })
       : null;
-  const exValue = consensus?.status === "confirmed" ? consensus.value : vote.value;
+  const exValue = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? null : vote.value;
   const exCandidates = exValue !== null ? [] : [...new Set([...(consensus?.ranked.map((c) => c.value) ?? []), ...vote.candidates])].slice(0, 3);
   if (hints.difficulty === null && hints.notes === null && titleText === null && vote.candidates.length === 0) return null;
 
