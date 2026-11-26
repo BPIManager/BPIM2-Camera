@@ -82,7 +82,10 @@ export default function CameraPicker({ value, onChange }: Props) {
           </option>
         ))}
       </select>
-      <div className="relative aspect-video w-full overflow-hidden rounded-md border border-border bg-card">
+      <div
+        className="relative aspect-video w-full overflow-hidden rounded-md border border-border bg-card select-none [-webkit-touch-callout:none]"
+        onContextMenu={(e) => e.preventDefault()}
+      >
         <video ref={videoRef} className="size-full object-cover" playsInline muted />
         {(status === "loading" || previewError) && (
           <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-muted-foreground">

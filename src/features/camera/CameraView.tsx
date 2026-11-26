@@ -167,7 +167,9 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
     <div className="relative flex h-full flex-col bg-background">
       <div
         ref={viewRef}
-        className="relative min-h-0 flex-1 touch-none overflow-hidden"
+        className="relative min-h-0 flex-1 touch-none overflow-hidden select-none [-webkit-touch-callout:none]"
+        // 映像や撮影直後の画像を長押ししたときの、保存・共有のメニューを出さない（Android・iOS）
+        onContextMenu={(e) => e.preventDefault()}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
