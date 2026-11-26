@@ -5,7 +5,7 @@ import type { Recognizer, RecognizeInput } from "../recognizer";
 import type { OcrEngine, OcrLine } from "./engine";
 import { rawFromPaddle } from "./fromPaddle";
 
-/** スコア欄は拡大率を変えて 2 回読み、読みの一致を票にする */
+/** スコア欄は 1 回目で EX が確定しなければ、拡大率を変えてもう 1 回読む（確定すれば省いて速くする） */
 const SCORE_WIDTHS = [400, 1100] as const;
 const TITLE_WIDTH = 900;
 const SMALL_WIDTH = 700;
@@ -30,10 +30,14 @@ export class PaddleRecognizer implements Recognizer {
     const r = input.regions;
     const t0 = performance.now();
     const title = await this.engine.readLines(await encode(r.title, TITLE_WIDTH));
-    const score: OcrLine[][] = [];
-    for (const w of SCORE_WIDTHS) score.push(await this.engine.readLines(await encode(r.score, w)));
     const judge = await this.engine.readLines(await encode(r.judge, SMALL_WIDTH));
-    const raw = rawFromPaddle({ title, score, judge }, this.getMaster());
+    const score: OcrLine[][] = [];
+    let raw: RawResult | null = null;
+    for (const w of SCORE_WIDTHS) {
+      score.push(await this.engine.readLines(await encode(r.score, w)));
+      raw = rawFromPaddle({ title, score, judge }, this.getMaster());
+      if (raw?.exScore.value != null) break;
+    }
     logOcr({
       title,
       score,

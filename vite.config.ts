@@ -5,6 +5,8 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+const ISOLATION_HEADERS = { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp" };
+
 /** 開発中だけ、ブラウザから送られた読み取りログをこのターミナルに表示する（スマホ実機のデバッグ用） */
 function ocrDebugLog(): Plugin {
   return {
@@ -62,7 +64,9 @@ export default defineConfig({
     }),
   ],
   // tailscale serve 経由（*.ts.net）でスマホから開けるようにする
-  server: { host: true, allowedHosts: [".ts.net"] },
+  // 分離されたページ（cross-origin isolated）にすると、OCR の WASM がマルチスレッドで動き、約 3 倍速くなる
+  server: { host: true, allowedHosts: [".ts.net"], headers: ISOLATION_HEADERS },
+  preview: { headers: ISOLATION_HEADERS },
   // PaddleOCR は CPU（WASM）だけで動かす。WebGPU 版の WASM は 30MB と大きい
   resolve: { alias: { "@": path.resolve(__dirname, "src"), "onnxruntime-web": "onnxruntime-web/wasm" } },
   test: { environment: "node", include: ["test/**/*.test.ts"] },
