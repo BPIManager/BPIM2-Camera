@@ -1,6 +1,7 @@
 import type { RawResult } from "@/lib/domain/types";
 import { matchChart } from "@/lib/songs/matcher";
 import type { SongMasterEntry } from "@/lib/songs/types";
+import { decideExScore, type Observations } from "./consensus/engine";
 import { guessTitle } from "./fromTokens";
 import { voteScore } from "./scoreVote";
 import { parseChartHints, type OcrToken } from "./tokens";
@@ -15,6 +16,8 @@ export function rawFromRegions(
   master: readonly SongMasterEntry[],
   /** 日本語 OCR で読んだ曲名の 1 行（文字ごとに分かれたトークンを連結したもの） */
   japaneseTitle?: string,
+  /** スコア欄以外の独立した読み（ジャッジ表・DJ LEVEL 行の差分・ベストとの差分）。あれば合意で EX を決める */
+  extras?: Omit<Observations, "notes" | "score">,
 ): RawResult | null {
   const hints = parseChartHints(titleTokens);
   const titleText = japaneseTitle?.trim() || guessTitle(titleTokens);
@@ -22,6 +25,13 @@ export function rawFromRegions(
   // 曲名の弱い一致で範囲を狭めると正しい EX まで除外するので、確定した譜面のノーツ数だけを使う
   const notes = hints.notes ?? (match.confident ? match.candidates[0].entry.notes : null);
   const vote = voteScore(scoreReadings, notes);
+  // 独立した読みが 2 つ以上そろえば合意で決める。足りなければ従来どおり、スコア欄の多数決だけで判断する
+  const consensus =
+    notes !== null && extras
+      ? decideExScore({ notes, score: [...new Set(scoreReadings.flatMap((r) => r.map(Number).filter((n) => Number.isInteger(n))))], ...extras })
+      : null;
+  const exValue = consensus?.status === "confirmed" ? consensus.value : vote.value;
+  const exCandidates = exValue !== null ? [] : [...new Set([...(consensus?.ranked.map((c) => c.value) ?? []), ...vote.candidates])].slice(0, 3);
   if (hints.difficulty === null && hints.notes === null && titleText === null && vote.candidates.length === 0) return null;
 
   return {
@@ -30,9 +40,9 @@ export function rawFromRegions(
     level: hints.level,
     notes: hints.notes,
     titleText,
-    exScore: vote.value !== null ? { value: vote.value, confidence: 0.9 } : { value: null, confidence: vote.candidates.length ? 0.3 : 0 },
+    exScore: exValue !== null ? { value: exValue, confidence: consensus?.status === "confirmed" ? 0.97 : 0.9 } : { value: null, confidence: exCandidates.length ? 0.3 : 0 },
     bestExScore: null,
-    judge: null,
+    judge: extras?.judge?.pg !== undefined && extras.judge.gr !== undefined ? { pgreat: extras.judge.pg, great: extras.judge.gr, good: extras.judge.gd ?? 0, bad: extras.judge.bd ?? 0, poor: extras.judge.poor ?? 0, fast: null, slow: null } : null,
     missCount: null,
     bestMissCount: null,
     clearType: null,
@@ -40,7 +50,7 @@ export function rawFromRegions(
     djLevel: null,
     useOption: null,
     isNewRecord: false,
-    exCandidates: vote.value !== null ? [] : vote.candidates,
+    exCandidates,
   };
 }
 

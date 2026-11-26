@@ -82,3 +82,27 @@ describe("日本語の曲名", () => {
     expect(chartResolvedByHints(toks("ANOTHER 9"), jpMaster)).toBe(false);
   });
 });
+
+describe("合意エンジンとの接続", () => {
+  it("スコア欄が 1 回しか読めなくても、ジャッジ表とランク差分が一致すれば確認なしで確定する", () => {
+    const raw = rawFromRegions(toks("ANOTHER 12", "1787 NOTES"), [["3365"]], master, undefined, {
+      judge: { pg: 1591, gr: 183 },
+      rankGap: { rank: "AAA", sign: "+", gap: 188 },
+    });
+    expect(raw!.exScore.value).toBe(3365);
+    expect(raw!.judge?.pgreat).toBe(1591);
+  });
+
+  it("スコア欄が読み誤り（2 回一致）でも、他の 2 つの独立した読みが勝つ", () => {
+    const raw = rawFromRegions(toks("ANOTHER 12", "1787 NOTES"), [["2365"], ["2365"]], master, undefined, {
+      judge: { pg: 1591, gr: 183 },
+      rankGap: { rank: "AAA", sign: "+", gap: 188 },
+    });
+    expect(raw!.exScore.value).toBe(3365);
+  });
+
+  it("追加の読みが無ければ従来どおり（スコア欄の多数決のみ）", () => {
+    const raw = rawFromRegions(toks("ANOTHER 12", "1787 NOTES"), [["3365"], ["3365"]], master);
+    expect(raw!.exScore.value).toBe(3365);
+  });
+});
