@@ -7,6 +7,7 @@ import type { Recognizer, RecognizeInput } from "../recognizer";
 import type { OcrEngine, OcrLine } from "./engine";
 import { resolveResult } from "../resolve";
 import { rawFromPaddle } from "./fromPaddle";
+import { deskewBitmap } from "./deskewBitmap";
 
 /**
  * スコア欄は、水色の数字だけを色で抜き出してから読む（左隣の前回スコアや背景を除くため）。
@@ -83,6 +84,21 @@ export class PaddleRecognizer implements Recognizer {
       stage("曲名をもう一度読んでいます");
       title.push(...(await this.engine.readLines(await encode(r.title, TITLE_PASSES[1].width, TITLE_PASSES[1].mask))));
       resolved = announceIfResolved(rawFromPaddle({ title, score: [], judge: [] }, this.getMaster()));
+    }
+    // それでも決まらなければ、写真が斜めかもしれない。文字の行の傾きを推定して水平に直し、もう一度読む
+    // （斜めの文字は検出されにくい。決まらなかったときだけなので、ふだんは遅くならず、読めていたものを悪化させない）
+    if (!resolved) {
+      const level = await deskewBitmap(r.title);
+      if (level) {
+        stage("傾きを直して曲名を読んでいます");
+        title.push(...(await this.engine.readLines(await encode(level.bitmap, TITLE_PASSES[0].width, TITLE_PASSES[0].mask))));
+        resolved = announceIfResolved(rawFromPaddle({ title, score: [], judge: [] }, this.getMaster()));
+        if (!resolved) {
+          title.push(...(await this.engine.readLines(await encode(level.bitmap, TITLE_PASSES[1].width, TITLE_PASSES[1].mask))));
+          resolved = announceIfResolved(rawFromPaddle({ title, score: [], judge: [] }, this.getMaster()));
+        }
+        level.bitmap.close();
+      }
     }
     // 曲名の読み取りを尽くしても確定できない。ここで知らせる（判定やスコアの手がかりで、あとから確定することもある）
     if (!resolved) input.onSong?.({ kind: "unresolved" });
