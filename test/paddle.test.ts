@@ -173,3 +173,28 @@ describe("判定表の PG・GR から計算した EX が、スコア欄の読み
     expect(r?.exScore.value).toBeNull();
   });
 });
+
+describe("曲の決定（resolveResult まで通す）", () => {
+  const master: SongMasterEntry[] = [
+    { songId: 4351, title: "The Clown of 24stairs", playStyle: "SP", difficulty: "NORMAL", level: 6, notes: 579 },
+    { songId: 4352, title: "The Clown of 24stairs", playStyle: "SP", difficulty: "HYPER", level: 10, notes: 1146 },
+    { songId: 5703, title: "The Clown of 24stairs", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1788 },
+    { songId: 9000, title: "RINNE", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1788 },
+  ];
+  it("実機のログ: レベルが 2 と読まれ、NOTES が切れていても、曲が決まる", async () => {
+    const { resolveResult } = await import("@/lib/recognition/resolve");
+    const raw = rawFromPaddle(
+      {
+        title: [line("The Clown of 24stairs", 96), line("ANOTHER 2 S 7 1788 NOT", 78), line("Yu_Asahina", 78)],
+        score: [[line("3810", 66)], [], [line("32108", 79), line("+0055", 98)]],
+        scoreGroups: ["color", "color", "raw"],
+        judge: [[line("1476", 60), line("258", 81)]],
+      },
+      master,
+    );
+    expect(raw).not.toBeNull();
+    const res = resolveResult(raw!, master);
+    expect(res.chart?.songId).toBe(5703);
+    expect(res.issues).not.toContain("song-not-found");
+  });
+});

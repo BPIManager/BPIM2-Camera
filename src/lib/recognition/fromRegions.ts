@@ -59,12 +59,14 @@ export function rawFromRegions(
   const exCandidates = exValue !== null ? [] : [...new Set([...(consensus?.ranked.map((c) => c.value) ?? []), ...vote.candidates])].slice(0, 3);
   if (hints.difficulty === null && hints.notes === null && titleText === null && vote.candidates.length === 0) return null;
 
+  // 譜面が確定していれば、読み取った生の値（レベルの読み違いなど）ではなく、特定した譜面の値を返す
+  const chart = match.confident ? match.candidates[0].entry : null;
   return {
-    playStyle: hints.playStyle,
-    difficulty: hints.difficulty,
-    level: hints.level,
-    notes: hints.notes,
-    titleText,
+    playStyle: chart?.playStyle ?? hints.playStyle,
+    difficulty: chart?.difficulty ?? hints.difficulty,
+    level: chart?.level ?? hints.level,
+    notes: chart?.notes ?? hints.notes,
+    titleText: chart?.title ?? titleText,
     exScore: exValue !== null ? { value: exValue, confidence: consensus?.status === "confirmed" ? 0.97 : 0.9 } : { value: null, confidence: exCandidates.length ? 0.3 : 0 },
     bestExScore: null,
     judge: extras?.judge?.pg !== undefined && extras.judge.gr !== undefined ? { pgreat: extras.judge.pg, great: extras.judge.gr, good: extras.judge.gd ?? 0, bad: extras.judge.bd ?? 0, poor: extras.judge.poor ?? 0, fast: null, slow: null } : null,
