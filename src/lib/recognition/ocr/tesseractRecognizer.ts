@@ -1,11 +1,25 @@
 import type { RawResult } from "@/lib/domain/types";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { rawFromTokens } from "../fromTokens";
-import type { Recognizer } from "../recognizer";
+import { rawFromRegions } from "../fromRegions";
+import type { Recognizer, RecognizeInput } from "../recognizer";
 import type { OcrToken } from "../tokens";
 import { maskVariant, VARIANTS, type Variant } from "./preprocess";
 
 const WORK_WIDTH = 1600;
+const TITLE_WIDTH = 1400;
+const SCORE_WIDTH = 600;
+const TITLE_VARIANTS: readonly Variant[] = ["white", "contrast", "bright"];
+const SCORE_VARIANTS: readonly Variant[] = ["cyan", "white", "contrast", "bright"];
+
+/** 切り出し画像を OCR 向けの大きさに拡大して画素を取り出す */
+function toImageData(bitmap: ImageBitmap, width: number): ImageData {
+  const h = Math.max(1, Math.round((bitmap.height * width) / bitmap.width));
+  const c = new OffscreenCanvas(width, h);
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(bitmap, 0, 0, width, h);
+  return ctx.getImageData(0, 0, width, h);
+}
 
 type Worker = import("tesseract.js").Worker;
 
@@ -32,7 +46,31 @@ export class TesseractRecognizer implements Recognizer {
     return this.worker;
   }
 
-  async recognize(frame: ImageBitmap): Promise<RawResult | null> {
+  async recognize(input: RecognizeInput): Promise<RawResult | null> {
+    return input.regions ? this.recognizeRegions(input.regions) : this.recognizeFull(input.full);
+  }
+
+  /** ガイド枠で切り出したスコア部と曲名帯をそれぞれ読む。スコアは数字だけを許可して複数の前処理で投票する */
+  private async recognizeRegions(regions: { score: ImageBitmap; title: ImageBitmap }): Promise<RawResult | null> {
+    const { PSM } = await import("tesseract.js");
+    const worker = await this.ensureWorker();
+    const base = { tessedit_pageseg_mode: PSM.SPARSE_TEXT };
+
+    await worker.setParameters({ ...base, tessedit_char_whitelist: "" });
+    const titleTokens: OcrToken[] = [];
+    for (const v of TITLE_VARIANTS) titleTokens.push(...(await this.readVariant(worker, toImageData(regions.title, TITLE_WIDTH), v)));
+
+    await worker.setParameters({ ...base, tessedit_char_whitelist: "0123456789+" });
+    const scoreReadings: string[][] = [];
+    for (const v of SCORE_VARIANTS) {
+      const tokens = await this.readVariant(worker, toImageData(regions.score, SCORE_WIDTH), v);
+      scoreReadings.push(tokens.map((t) => t.text));
+    }
+    await worker.setParameters({ ...base, tessedit_char_whitelist: "" });
+    return rawFromRegions(titleTokens, scoreReadings, this.getMaster());
+  }
+
+  private async recognizeFull(frame: ImageBitmap): Promise<RawResult | null> {
     const scale = WORK_WIDTH / frame.width;
     const w = WORK_WIDTH;
     const h = Math.round(frame.height * scale);

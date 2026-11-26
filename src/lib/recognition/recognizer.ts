@@ -1,16 +1,16 @@
 import type { RawResult } from "@/lib/domain/types";
 
-/**
- * 1 フレームの画面から値を読む。実装は Worker 内（OffscreenCanvas）で動かす。
- * 画面が検出できなければ null。
- */
-export interface Recognizer {
-  recognize(frame: ImageBitmap): Promise<RawResult | null>;
+export interface RecognizeInput {
+  /** 撮影した全体画像（履歴・シェア用）。領域がないとき（画像取り込み）はこれ全体を読む */
+  full: ImageBitmap;
+  /** ガイド枠で切り出したスコア部と曲名帯。カメラ撮影のときだけ渡る */
+  regions?: { score: ImageBitmap; title: ImageBitmap };
 }
 
-/** 読み取り器が未導入のときの代替。常に読めなかったとして手入力へ回す */
-export class NullRecognizer implements Recognizer {
-  async recognize(_frame: ImageBitmap): Promise<RawResult | null> {
-    return null;
-  }
+/**
+ * 画面から値を読む。実装は Worker 内（OffscreenCanvas）で動かす。
+ * 何も読めなければ null。
+ */
+export interface Recognizer {
+  recognize(input: RecognizeInput): Promise<RawResult | null>;
 }
