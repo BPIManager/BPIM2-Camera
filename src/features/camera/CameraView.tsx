@@ -7,7 +7,8 @@ import { useAutoCapture } from "./useAutoCapture";
 import type { SongProgress } from "@/lib/recognition/recognizer";
 import type { Size } from "@/lib/vision/framing";
 import { cn } from "@/lib/utils";
-import { GUIDE_KEYS, GUIDE_LABELS, guideRects, referenceRect, type GuideKey, type GuideLayout } from "@/lib/vision/guides";
+import { moveRect, resizeRect, type Corner } from "@/lib/vision/guideEdit";
+import { GUIDE_KEYS, GUIDE_LABELS, layoutToRects, referenceRect, resolveLayout, type GuideKey, type GuideLayout } from "@/lib/vision/guides";
 
 interface Props {
   active: boolean;
@@ -27,10 +28,21 @@ interface Props {
   onCancel: () => void;
   /** 自動撮影（静止して、枠に画面が合ったら、自動で読み取りを始める） */
   autoCapture: boolean;
+  /** 枠をなぞって動かしたとき（指を離したときに 1 回）。新しい配置を保存する */
+  onLayoutChange: (layout: GuideLayout) => void;
 }
 
+const CORNERS: { corner: Corner; pos: string }[] = [
+  { corner: "nw", pos: "-left-3 -top-3" },
+  { corner: "ne", pos: "-right-3 -top-3" },
+  { corner: "sw", pos: "-bottom-3 -left-3" },
+  { corner: "se", pos: "-bottom-3 -right-3" },
+];
+
+type Drag = { key: GuideKey; mode: "move" | Corner; x: number; y: number; start: GuideLayout[GuideKey] };
+
 /** スコアと曲名帯の位置を白枠で示す。シャッター時は各枠の中を切り出して読み取る */
-export default function CameraView({ active, busy, stage, song, layout, layoutAspect, onViewSize, onCapture, onCancel, autoCapture }: Props) {
+export default function CameraView({ active, busy, stage, song, layout, layoutAspect, onViewSize, onCapture, onCancel, autoCapture, onLayoutChange }: Props) {
   const { videoRef, state, snapshot, zoom, zoomInfo, setZoom, grabGray, grabRegions } = useCamera(active);
   const fileRef = useRef<HTMLInputElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
@@ -92,8 +104,43 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
     return () => ro.disconnect();
   }, [onViewSize]);
 
+  // 枠の移動。なぞっている間は手元の配置（draft）で描き、指を離したときに保存する
+  const [draft, setDraft] = useState<GuideLayout | null>(null);
+  const [selected, setSelected] = useState<GuideKey>("score");
+  const drag = useRef<Drag | null>(null);
+  const draftRef = useRef<GuideLayout | null>(null);
+  const resolved = draft ?? resolveLayout(layout);
+
   const reference = layoutAspect ? referenceRect(view, layoutAspect) : null;
-  const rects = guideRects(view, layout, layoutAspect);
+  // 枠は基準の矩形（写真の縦横比、なければ表示領域全体）に対する割合
+  const base = referenceRect(view, layoutAspect);
+  const rects = layoutToRects(resolved, view, layoutAspect);
+
+  const beginDrag = (e: React.PointerEvent, key: GuideKey, mode: Drag["mode"]) => {
+    if (busy) return;
+    // ピンチ（ズーム）の処理へ渡さない
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setSelected(key);
+    drag.current = { key, mode, x: e.clientX, y: e.clientY, start: resolveLayout(layout)[key] };
+    draftRef.current = null;
+  };
+  const moveDrag = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || base.width === 0 || base.height === 0) return;
+    const dx = (e.clientX - d.x) / base.width;
+    const dy = (e.clientY - d.y) / base.height;
+    const next = d.mode === "move" ? moveRect(d.start, dx, dy) : resizeRect(d.start, d.mode, dx, dy);
+    draftRef.current = { ...resolveLayout(layout), [d.key]: next };
+    setDraft(draftRef.current);
+  };
+  const endDrag = () => {
+    drag.current = null;
+    const done = draftRef.current;
+    draftRef.current = null;
+    if (done) onLayoutChange(done);
+    setDraft(null);
+  };
 
   /** 撮影する（シャッターも、自動撮影も、これを使う） */
   const shoot = async () => {
@@ -106,7 +153,8 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
   // 結果の画面が開いている間（active が false）は止め、読み取り中は一時停止する
   const detected = useAutoCapture({
     enabled: autoCapture && active && state === "ready",
-    paused: busy,
+    // 枠をなぞっている間は、下見も撮影も止める
+    paused: busy || draft !== null,
     grabGray,
     grabRegions,
     guides: { rects, view },
@@ -138,15 +186,35 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
             style={{ left: reference.x, top: reference.y, width: reference.width, height: reference.height }}
           />
         )}
-        {GUIDE_KEYS.map((key) => [GUIDE_LABELS[key], rects[key]] as const).map(([label, r]) => (
-          <div
-            key={label}
-            className={cn("pointer-events-none absolute rounded-sm border-2 transition-colors", detected ? "border-success" : "border-guide")}
-            style={{ left: r.x, top: r.y, width: r.width, height: r.height }}
-          >
-            <span className="absolute -top-6 left-0 text-xs font-medium">{label}</span>
-          </div>
-        ))}
+        {GUIDE_KEYS.map((key) => {
+          const r = rects[key];
+          const on = selected === key && !busy;
+          return (
+            <div
+              key={key}
+              onPointerDown={(e) => beginDrag(e, key, "move")}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              className={cn(
+                "absolute touch-none rounded-sm border-2 transition-colors",
+                busy ? "pointer-events-none" : "cursor-move",
+                detected ? "border-success" : on ? "border-primary" : "border-guide",
+              )}
+              style={{ left: r.x, top: r.y, width: r.width, height: r.height }}
+            >
+              <span className="pointer-events-none absolute -top-6 left-0 text-xs font-medium">{GUIDE_LABELS[key]}</span>
+              {on &&
+                CORNERS.map(({ corner, pos }) => (
+                  <span
+                    key={corner}
+                    onPointerDown={(e) => beginDrag(e, key, corner)}
+                    className={cn("absolute size-6 touch-none rounded-full border-2 border-primary bg-background", pos)}
+                  />
+                ))}
+            </div>
+          );
+        })}
         <p className="pointer-events-none absolute inset-x-0 top-3 px-4 text-center text-sm font-medium">
           {showFrozen
             ? "読み取っています。カメラはもう動かして大丈夫です"
@@ -155,7 +223,7 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
               : detected
                 ? "そのまま動かさないでください"
                 : autoCapture
-                  ? "白枠を画面の各部分に重ねると、自動で読み取ります"
+                  ? "白枠を画面の各部分に重ねると、自動で読み取ります（枠はなぞって動かせます）"
                   : "白枠を画面の各部分に重ねてください"}
         </p>
         {busy && <ScanOverlay rects={rects} stage={stage} song={song} />}
