@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, TriangleAlert } from "lucide-react";
+import { Check, Info, TriangleAlert } from "lucide-react";
 import BrandMark from "@/components/brand-mark";
 import SyncTargetPicker from "@/components/sync-target-picker";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -214,6 +214,13 @@ export function CalibrateStep({
       }
     >
       <CalibrateAnimation />
+      <Alert variant="info">
+        <Info />
+        <AlertTitle>撮影画面でも調整できます</AlertTitle>
+        <AlertDescription>
+          <p>カメラの映像の上でも、枠をなぞって動かしたり、四隅で大きさを変えたりできます。</p>
+        </AlertDescription>
+      </Alert>
       {done && (
         <p className="flex items-center gap-2 text-sm font-medium">
           <Check className="size-4 text-success" />
