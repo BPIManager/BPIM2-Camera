@@ -18,6 +18,8 @@ export interface TrainingSample {
   titleCrop: Blob;
   /** 判定表の切り出し（PG/GR の学習に使う）。古いサンプルにはない */
   judgeCrop?: Blob;
+  /** サーバーへ送り終えた時刻（ms）。未送信は undefined */
+  uploadedAt?: number;
 }
 
 interface CameraDB extends DBSchema {

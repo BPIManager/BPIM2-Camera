@@ -74,6 +74,8 @@ BPI は ☆11・☆12 のみ算出する。☆10 以下も読み取り・履歴�
 
 統計データの送信に同意していると、確認済みの結果（正解ラベル）と切り出した画像（スコア部・曲名帯のみ）を端末に貯める。設定の「書き出す」で zip（labels.json と画像）にできる。
 
+送信先は `VITE_STATS_UPLOAD_ENDPOINT`（未設定なら送信しない）。同意があり「画像を含める」がオンのとき、確定時・起動時・オンライン復帰時に、未送信分を `worker/`（署名付き PUT URL を発行する Cloudflare Worker）経由で R2 へ直接送る（`samples/<端末ID>/<サンプルID>/{score,title,judge}.jpg・labels.json`）。Worker のデプロイは `worker/wrangler.jsonc` の変数（`R2_BUCKET`・`ALLOWED_ORIGINS`）を設定し、`R2_ACCOUNT_ID`・`R2_ACCESS_KEY_ID`・`R2_SECRET_ACCESS_KEY` を `wrangler secret put` で入れる。
+
 - `pnpm train:digits`: `training/manifest.json` の正解ラベル付きサンプル（`SAMPLE_DIR`、既定 `D:/camera-example`）から数字モデルを作り直す
 - `pnpm eval`: 実画像サンプルでの読み取り評価
 
@@ -81,7 +83,7 @@ BPI は ☆11・☆12 のみ算出する。☆10 以下も読み取り・履歴�
 
 - 曲マスタは BPIM2 の `GET /api/v2/songs/master`（BPIM2 PR #699）。デプロイ前や失敗時は同梱シード
 - 数字モデルは見本 12 個（数字 1・3・4・5・6・7・9）だけ。0・2・8 の見本がないため、モデルの読み取りは 1 票扱い。実写真での自動確定率は未計測
-- 統計データの R2 送信は署名付き URL 発行 Worker が未実装（端末内の蓄積と書き出しは可能）
+- 統計データの R2 送信は実装済みだが、Worker のデプロイと R2 バケット・アクセスキーの用意が必要（未デプロイ）。URL 発行にレート制限・認証はない
 
 ## ライセンス
 

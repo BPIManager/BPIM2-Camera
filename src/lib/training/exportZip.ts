@@ -20,6 +20,25 @@ export interface TrainingLabel {
   judgeImage?: string;
 }
 
+/** 正解ラベル。画像のパスは、zip や R2 のなかでの名前を呼び出し側が決める */
+export function sampleLabel(s: TrainingSample, images: { scoreImage: string; titleImage: string; judgeImage?: string }): TrainingLabel {
+  return {
+    id: s.id,
+    createdAt: s.createdAt,
+    playSide: s.playSide,
+    exScore: s.exScore,
+    digits: String(s.exScore),
+    songId: s.chart.songId,
+    title: s.chart.title,
+    level: s.chart.level,
+    difficulty: s.chart.difficulty,
+    notes: s.chart.notes,
+    autoConfirmed: s.autoConfirmed,
+    correctedFields: s.correctedFields,
+    ...images,
+  };
+}
+
 const bytes = async (b: Blob) => new Uint8Array(await b.arrayBuffer());
 
 /**
@@ -36,23 +55,7 @@ export async function buildTrainingZip(samples: readonly TrainingSample[]): Prom
     files[titleImage] = await bytes(s.titleCrop);
     const judgeImage = s.judgeCrop ? `images/${s.id}_judge.jpg` : undefined;
     if (judgeImage && s.judgeCrop) files[judgeImage] = await bytes(s.judgeCrop);
-    labels.push({
-      id: s.id,
-      createdAt: s.createdAt,
-      playSide: s.playSide,
-      exScore: s.exScore,
-      digits: String(s.exScore),
-      songId: s.chart.songId,
-      title: s.chart.title,
-      level: s.chart.level,
-      difficulty: s.chart.difficulty,
-      notes: s.chart.notes,
-      autoConfirmed: s.autoConfirmed,
-      correctedFields: s.correctedFields,
-      scoreImage,
-      titleImage,
-      judgeImage,
-    });
+    labels.push(sampleLabel(s, { scoreImage, titleImage, judgeImage }));
   }
   files["labels.json"] = new TextEncoder().encode(JSON.stringify(labels, null, 2));
   return { blob: new Blob([zipSync(files, { level: 0 })], { type: "application/zip" }), labels };

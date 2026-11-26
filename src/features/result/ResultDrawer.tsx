@@ -43,6 +43,7 @@ import {
 } from "@/lib/bpi/songData";
 import { saveResult } from "@/lib/storage/history";
 import { saveSample } from "@/lib/storage/samples";
+import { flushIfEnabled } from "@/lib/training/upload";
 import { saveImage } from "@/lib/share/save";
 import { shareResult } from "@/lib/share/share";
 import { buildShareText } from "@/lib/share/text";
@@ -128,6 +129,8 @@ export default function ResultDrawer({
         titleCrop: draft.regions.title,
         judgeCrop: draft.regions.judge,
       });
+      // 貯めたものを送る。確定の操作は待たせない
+      void flushIfEnabled(settings)?.catch(() => undefined);
     }
   };
 

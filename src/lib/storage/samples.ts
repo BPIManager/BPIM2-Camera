@@ -15,3 +15,14 @@ export async function countSamples(): Promise<number> {
 export async function clearSamples(): Promise<void> {
   await (await getDb()).clear("samples");
 }
+
+/** 未送信の件数 */
+export async function countPendingSamples(): Promise<number> {
+  return (await listSamples()).filter((s) => s.uploadedAt === undefined).length;
+}
+
+export async function markUploaded(id: string, at = Date.now()): Promise<void> {
+  const db = await getDb();
+  const s = await db.get("samples", id);
+  if (s) await db.put("samples", { ...s, uploadedAt: at });
+}

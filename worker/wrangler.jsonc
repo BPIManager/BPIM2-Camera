@@ -1,0 +1,11 @@
+{
+  // 統計データ（学習サンプル）の送信用に、R2 への署名付き PUT URL を発行する Worker
+  // 秘密情報は `wrangler secret put R2_ACCOUNT_ID|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY` で入れる
+  "name": "bpim2-camera-upload",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "vars": {
+    "R2_BUCKET": "bpim2cam",
+    "ALLOWED_ORIGINS": "http://localhost:5173"
+  }
+}
