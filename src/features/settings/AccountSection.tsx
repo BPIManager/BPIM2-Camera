@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import Avatar from "@/components/ui/avatar";
 import Button from "@/components/ui/button";
+import ConfirmDialog from "@/components/confirm-dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useBpim2Profile } from "@/hooks/useBpim2Profile";
 import { LATEST_VERSION } from "@/lib/bpi/client";
@@ -12,6 +14,7 @@ import { scoreLogUrl } from "@/lib/links";
 export default function AccountSection() {
   const { user, ready } = useAuth();
   const { profile } = useBpim2Profile(user);
+  const [confirmOut, setConfirmOut] = useState(false);
   if (!ready) return null;
 
   if (!user) {
@@ -46,14 +49,22 @@ export default function AccountSection() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            if (!window.confirm("BPIM2 からログアウトします。よろしいですか？")) return;
-            void signOutUser();
-          }}
+          onClick={() => setConfirmOut(true)}
         >
           ログアウト
         </Button>
       </div>
+      <ConfirmDialog
+        open={confirmOut}
+        onClose={() => setConfirmOut(false)}
+        title="ログアウト"
+        description="BPIM2 からログアウトします。端末内の履歴は消えません。"
+        confirmLabel="ログアウト"
+        onConfirm={() => {
+          setConfirmOut(false);
+          void signOutUser();
+        }}
+      />
     </section>
   );
 }

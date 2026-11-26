@@ -3,12 +3,14 @@ import Button from "@/components/ui/button";
 import type { Size } from "@/lib/vision/framing";
 import { resolveLayout } from "@/lib/vision/guides";
 import AccountSection from "./AccountSection";
+import LicensesSection from "./LicensesSection";
+import ConfirmDialog from "@/components/confirm-dialog";
 import GuideEditor from "./GuideEditor";
 import Label from "@/components/ui/label";
 import SyncTargetPicker from "@/components/sync-target-picker";
 import Switch from "@/components/ui/switch";
 import { clearHistory } from "@/lib/storage/history";
-import { clearSamples, countSamples, listSamples } from "@/lib/storage/samples";
+import { clearSamples, countPendingSamples, countSamples, listSamples } from "@/lib/storage/samples";
 import { buildTrainingZip } from "@/lib/training/exportZip";
 import type { Settings } from "@/lib/storage/settings";
 
@@ -36,8 +38,11 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint?: 
 export default function SettingsView({ settings, update, viewSize, installable, onOpenInstall }: Props) {
   const [editingGuides, setEditingGuides] = useState(false);
   const [sampleCount, setSampleCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [confirm, setConfirm] = useState<"samples" | "history" | null>(null);
   useEffect(() => {
     void countSamples().then(setSampleCount);
+    void countPendingSamples().then(setPendingCount);
   }, []);
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 pb-8">
@@ -106,7 +111,7 @@ export default function SettingsView({ settings, update, viewSize, installable, 
       <div className="flex flex-col gap-2 border-b border-border py-3">
         <Label>学習データ</Label>
         <p className="text-xs text-muted-foreground">
-          統計データの送信に同意していると、確認した結果と切り出した画像（スコア部・曲名帯のみ）が端末に貯まります。いま {sampleCount} 件。
+          統計データの送信に同意していると、確認した結果と切り出した画像（スコア部・曲名帯のみ）が端末に貯まります。いま {sampleCount} 件（未送信 {pendingCount} 件）。送信はオンラインのときに自動で行います。
         </p>
         <div className="grid grid-cols-2 gap-2">
           <Button
@@ -127,11 +132,7 @@ export default function SettingsView({ settings, update, viewSize, installable, 
           <Button
             variant="outline"
             disabled={sampleCount === 0}
-            onClick={async () => {
-              if (!window.confirm("貯めた学習データを削除します。よろしいですか？")) return;
-              await clearSamples();
-              setSampleCount(0);
-            }}
+            onClick={() => setConfirm("samples")}
           >
             削除
           </Button>
@@ -143,13 +144,38 @@ export default function SettingsView({ settings, update, viewSize, installable, 
         </Button>
         <Button
           variant="destructive"
-          onClick={() => {
-            if (window.confirm("履歴をすべて削除します。よろしいですか？")) void clearHistory();
-          }}
+          onClick={() => setConfirm("history")}
         >
           履歴を削除
         </Button>
       </div>
+      <LicensesSection />
+      <ConfirmDialog
+        open={confirm === "samples"}
+        onClose={() => setConfirm(null)}
+        title="学習データを削除"
+        description="貯めた学習データを削除します。送信前のものも消え、元に戻せません。"
+        confirmLabel="削除する"
+        destructive
+        onConfirm={async () => {
+          setConfirm(null);
+          await clearSamples();
+          setSampleCount(0);
+          setPendingCount(0);
+        }}
+      />
+      <ConfirmDialog
+        open={confirm === "history"}
+        onClose={() => setConfirm(null)}
+        title="履歴をすべて削除"
+        description="撮影した結果の履歴をすべて削除します。元に戻せません。"
+        confirmLabel="削除する"
+        destructive
+        onConfirm={() => {
+          setConfirm(null);
+          void clearHistory();
+        }}
+      />
     </div>
   );
 }
