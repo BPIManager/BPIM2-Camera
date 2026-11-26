@@ -3,7 +3,7 @@ import type { SongMasterEntry } from "@/lib/songs/types";
 import { rawFromRegions } from "../fromRegions";
 import type { OcrToken } from "../tokens";
 import type { OcrLine } from "./engine";
-import { digitRuns, parseJudgeLines, parseRankGap } from "./parse";
+import { digitRuns, parseJudgeRows, parseRankGap, scoreCandidates } from "./parse";
 
 export interface PaddleReadings {
   /** 曲名・譜面の枠の行 */
@@ -27,7 +27,7 @@ export function pickTitleLine(lines: readonly OcrLine[]): string | null {
 export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntry[]): RawResult | null {
   const titleTokens: OcrToken[] = r.title.flatMap((l) => l.text.split(/\s+/).filter(Boolean).map((text) => ({ text, confidence: l.confidence })));
   const scoreReadings = r.score.map((lines) => digitRuns(lines.map((l) => l.text)));
-  const judge = r.judge ? parseJudgeLines(r.judge.map((l) => l.text)) : undefined;
+  const judge = r.judge ? parseJudgeRows(r.judge) : undefined;
   const rankGap = r.rank ? parseRankGap(r.rank.map((l) => l.text)) : undefined;
   const hasExtras = (judge && (judge.pg !== undefined || judge.gr !== undefined)) || rankGap;
   const extras = hasExtras ? { ...(judge ? { judge } : {}), ...(rankGap ? { rankGap } : {}) } : undefined;
