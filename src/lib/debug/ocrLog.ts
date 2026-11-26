@@ -1,5 +1,8 @@
 import type { OcrLine } from "@/lib/recognition/paddle/engine";
 
+/** 認識ロジックの版。コードを変えたら更新する（スマホが古いコードのままかを、ログで見分けるため） */
+export const OCR_REV = "r12 曲の決定に特定した譜面を反映";
+
 export interface OcrDebugEntry {
   title: readonly OcrLine[];
   score: readonly (readonly OcrLine[])[];
@@ -29,6 +32,7 @@ export function logOcr(e: OcrDebugEntry): void {
     ...e.score.map((s, i) => `score${i + 1}: ${texts(s)}`),
     `judge : ${texts(e.judge)}`,
     `result: ${JSON.stringify(e.result)}  (${Math.round(e.ms)}ms)`,
+    `rev   : ${OCR_REV}`,
   ];
   logDebug(...lines);
 }
