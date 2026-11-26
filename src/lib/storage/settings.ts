@@ -10,6 +10,8 @@ export interface Settings {
   /** 枠の基準にした写真の縦横比（幅 / 高さ）。枠はこの写真に対する割合。layout が null なら null */
   layoutAspect: number | null;
   autoCapture: boolean;
+  /** 撮影に使うカメラの deviceId。未選択（null）なら背面カメラ */
+  cameraId: string | null;
   saveToCameraRoll: boolean;
   /** BPIM2 にスコアを保存する先の既定（最新バージョン / INFINITAS）。結果画面で、1 件ごとに変えられる */
   syncTarget: SyncTarget;
@@ -32,6 +34,7 @@ export function defaultSettings(): Settings {
     layout: null,
     layoutAspect: null,
     autoCapture: true,
+    cameraId: null,
     saveToCameraRoll: true,
     syncTarget: DEFAULT_SYNC_TARGET,
     shareImage: "photo",
@@ -57,7 +60,7 @@ export function loadSettings(storage: Pick<Storage, "getItem" | "setItem"> = loc
       const aspect = typeof parsed.layoutAspect === "number" && parsed.layoutAspect > 0.2 && parsed.layoutAspect < 5 ? parsed.layoutAspect : null;
       // 縦横比が分からない枠は、旧来どおり表示領域全体への割合として扱う
       // 壊れた値は既定に戻す
-      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET };
+      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET, cameraId: typeof parsed.cameraId === "string" && parsed.cameraId ? parsed.cameraId : null };
     }
   } catch {
     /* 壊れた値や private モードでは既定値で動かす */

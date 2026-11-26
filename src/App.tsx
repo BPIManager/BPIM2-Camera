@@ -141,7 +141,7 @@ export default function App() {
         </header>
       )}
       <main className="min-h-0 flex-1">
-        {tab === "camera" && <CameraView active={draft === null} busy={busy} stage={stage} song={song} layout={settings.layout} layoutAspect={settings.layoutAspect} onViewSize={onViewSize} onCapture={handleCapture} onCancel={() => abortRef.current?.abort()} autoCapture={settings.autoCapture} onLayoutChange={(l) => update({ layout: l })} />}
+        {tab === "camera" && <CameraView active={draft === null} busy={busy} stage={stage} song={song} layout={settings.layout} layoutAspect={settings.layoutAspect} onViewSize={onViewSize} onCapture={handleCapture} onCancel={() => abortRef.current?.abort()} autoCapture={settings.autoCapture} cameraId={settings.cameraId} onLayoutChange={(l) => update({ layout: l })} />}
         {tab === "history" && <HistoryView active />}
         {tab === "settings" && <SettingsView settings={settings} update={update} viewSize={viewSize} installable={installMode !== "installed"} onOpenInstall={() => setInstallOpen(true)} />}
       </main>

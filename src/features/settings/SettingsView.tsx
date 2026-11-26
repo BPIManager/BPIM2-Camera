@@ -3,6 +3,7 @@ import Button from "@/components/ui/button";
 import type { Size } from "@/lib/vision/framing";
 import { resolveLayout } from "@/lib/vision/guides";
 import AccountSection from "./AccountSection";
+import CameraPicker from "@/components/camera-picker";
 import LicensesSection from "./LicensesSection";
 import ConfirmDialog from "@/components/confirm-dialog";
 import GuideEditor from "./GuideEditor";
@@ -83,6 +84,11 @@ export default function SettingsView({ settings, update, viewSize, installable, 
         <Label>BPIM2 の同期先（既定）</Label>
         <p className="text-xs text-muted-foreground">結果画面の「BPIM2同期」で保存する先です。結果画面では、1 件ごとに変えられます</p>
         <SyncTargetPicker value={settings.syncTarget} onChange={(syncTarget) => update({ syncTarget })} />
+      </div>
+      <div className="flex flex-col gap-2 border-b border-border py-3">
+        <Label>使うカメラ</Label>
+        <p className="text-xs text-muted-foreground">変えると、枠の位置がずれることがあります。そのときは枠を調整し直してください</p>
+        <CameraPicker value={settings.cameraId} onChange={(cameraId) => update({ cameraId })} />
       </div>
       <Row id="auto" label="自動撮影" hint="枠に画面を合わせて静止すると、自動で読み取ります">
         <Switch id="auto" checked={settings.autoCapture} onCheckedChange={(v) => update({ autoCapture: v })} />

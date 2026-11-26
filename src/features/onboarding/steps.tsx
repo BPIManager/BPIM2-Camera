@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Info, TriangleAlert } from "lucide-react";
 import BrandMark from "@/components/brand-mark";
+import CameraPicker from "@/components/camera-picker";
 import SyncTargetPicker from "@/components/sync-target-picker";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Avatar from "@/components/ui/avatar";
@@ -243,6 +244,31 @@ export function CalibrateStep({
           }}
         />
       )}
+    </Frame>
+  );
+}
+
+/** 使うカメラの選択。端末に複数のレンズがあるとき、毎回同じカメラで撮るために選ぶ */
+export function CameraStep({
+  settings,
+  update,
+  onNext,
+}: {
+  settings: Settings;
+  update: (p: Partial<Settings>) => void;
+  onNext: () => void;
+}) {
+  return (
+    <Frame
+      title="カメラを選ぶ"
+      lead="撮影に使うカメラを選びます。広角・望遠など複数のレンズがある端末では、枠の位置が変わらないよう、毎回同じカメラを使います。あとから設定で変更することもできます。"
+      actions={
+        <Button size="lg" onClick={onNext}>
+          次へ
+        </Button>
+      }
+    >
+      <CameraPicker value={settings.cameraId} onChange={(cameraId) => update({ cameraId })} />
     </Frame>
   );
 }

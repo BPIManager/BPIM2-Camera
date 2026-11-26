@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { openCameraStream } from "@/lib/camera/stream";
 import { guideToVideoRect, type Rect, type Size } from "@/lib/vision/framing";
 import { STILL_FRAME_WIDTH } from "@/lib/vision/autoCapture";
 import { toGray, type Gray } from "@/lib/vision/frame";
@@ -26,7 +27,7 @@ const DIGITAL_ZOOM: ZoomInfo = { min: 1, max: 4, step: 0.1, digital: true };
 type ZoomCapabilities = MediaTrackCapabilities & { zoom?: { min: number; max: number; step?: number } };
 
 /** 背面カメラを起動し、アンマウントで確実に止める。ズームは、カメラ自体のズームを使い、使えない端末では映像の拡大で代用する */
-export function useCamera(enabled: boolean) {
+export function useCamera(enabled: boolean, deviceId: string | null = null) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const [state, setState] = useState<CameraState>("idle");
@@ -48,11 +49,7 @@ export function useCamera(enabled: boolean) {
     let cancelled = false;
     setState("starting");
     setZoomInfo(null);
-    navigator.mediaDevices
-      .getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
-      })
+    openCameraStream(deviceId)
       .then(async (s) => {
         if (cancelled) {
           s.getTracks().forEach((t) => t.stop());
@@ -87,7 +84,7 @@ export function useCamera(enabled: boolean) {
       trackRef.current = null;
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, [enabled]);
+  }, [enabled, deviceId]);
 
   /** ズームの倍率を変える。カメラが対応していればカメラ自体のズーム、なければ映像の拡大 */
   const setZoom = useCallback(

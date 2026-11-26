@@ -2,7 +2,7 @@ import { ChevronLeft } from "lucide-react";
 import type { Size } from "@/lib/vision/framing";
 import type { Settings } from "@/lib/storage/settings";
 import { cn } from "@/lib/utils";
-import { CalibrateStep, ConsentStep, HowToStep, OptionsStep, SignInStep, WelcomeStep } from "./steps";
+import { CalibrateStep, CameraStep, ConsentStep, HowToStep, OptionsStep, SignInStep, WelcomeStep } from "./steps";
 
 interface Props {
   settings: Settings;
@@ -11,9 +11,9 @@ interface Props {
   viewSize: Size;
 }
 
-const STEP_COUNT = 6;
+const STEP_COUNT = 7;
 
-/** 初回起動のセットアップ。同意 → サインイン → キャリブレーション → 使い方 → オプション → 改善への協力 */
+/** 初回起動のセットアップ。同意 → サインイン → カメラ選択 → キャリブレーション → 使い方 → オプション → 改善への協力 */
 export default function Onboarding({ settings, update, viewSize }: Props) {
   const step = Math.min(Math.max(settings.onboardStep, 0), STEP_COUNT - 1);
   const go = (n: number) => update({ onboardStep: n });
@@ -41,10 +41,11 @@ export default function Onboarding({ settings, update, viewSize }: Props) {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
         {step === 0 && <WelcomeStep onAgree={() => update({ termsAcceptedAt: Date.now(), onboardStep: 1 })} />}
         {step === 1 && <SignInStep onNext={next} />}
-        {step === 2 && <CalibrateStep settings={settings} update={update} viewSize={viewSize} onNext={next} />}
-        {step === 3 && <HowToStep settings={settings} onNext={next} />}
-        {step === 4 && <OptionsStep settings={settings} update={update} onNext={next} />}
-        {step === 5 && <ConsentStep onDone={(statsConsent) => update({ statsConsent, onboarded: true })} />}
+        {step === 2 && <CameraStep settings={settings} update={update} onNext={next} />}
+        {step === 3 && <CalibrateStep settings={settings} update={update} viewSize={viewSize} onNext={next} />}
+        {step === 4 && <HowToStep settings={settings} onNext={next} />}
+        {step === 5 && <OptionsStep settings={settings} update={update} onNext={next} />}
+        {step === 6 && <ConsentStep onDone={(statsConsent) => update({ statsConsent, onboarded: true })} />}
       </div>
     </div>
   );

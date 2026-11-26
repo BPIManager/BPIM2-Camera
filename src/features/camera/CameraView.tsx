@@ -28,6 +28,8 @@ interface Props {
   onCancel: () => void;
   /** 自動撮影（静止して、枠に画面が合ったら、自動で読み取りを始める） */
   autoCapture: boolean;
+  /** 使うカメラ。未選択なら背面カメラ */
+  cameraId: string | null;
   /** 枠をなぞって動かしたとき（指を離したときに 1 回）。新しい配置を保存する */
   onLayoutChange: (layout: GuideLayout) => void;
 }
@@ -42,8 +44,8 @@ const CORNERS: { corner: Corner; pos: string }[] = [
 type Drag = { key: GuideKey; mode: "move" | Corner; x: number; y: number; start: GuideLayout[GuideKey] };
 
 /** スコアと曲名帯の位置を白枠で示す。シャッター時は各枠の中を切り出して読み取る */
-export default function CameraView({ active, busy, stage, song, layout, layoutAspect, onViewSize, onCapture, onCancel, autoCapture, onLayoutChange }: Props) {
-  const { videoRef, state, snapshot, zoom, zoomInfo, setZoom, grabGray, grabRegions } = useCamera(active);
+export default function CameraView({ active, busy, stage, song, layout, layoutAspect, onViewSize, onCapture, onCancel, autoCapture, cameraId, onLayoutChange }: Props) {
+  const { videoRef, state, snapshot, zoom, zoomInfo, setZoom, grabGray, grabRegions } = useCamera(active, cameraId);
   const fileRef = useRef<HTMLInputElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<Size>({ width: 0, height: 0 });
