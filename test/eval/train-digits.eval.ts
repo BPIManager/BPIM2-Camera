@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import { describe, it } from "vitest";
@@ -34,6 +34,13 @@ async function glyphsOf(s: Sample): Promise<Glyph[] | null> {
 describe("train digits", () => {
   it("見本を作ってモデルを書き出す", async () => {
     const manifest = JSON.parse(readFileSync("training/manifest.json", "utf8")) as { samples: Sample[] };
+    // 内部ラベル作成ツール（internal/, gitignore 済み）のラベルを優先して取り込む
+    const LOCAL = "internal/labels.local.json";
+    if (existsSync(LOCAL)) {
+      const local = (JSON.parse(readFileSync(LOCAL, "utf8")) as (Sample & { skipped?: boolean })[]).filter((l) => !l.skipped && l.digits);
+      const names = new Set(local.map((l) => l.image));
+      manifest.samples = [...manifest.samples.filter((m) => !names.has(m.image)), ...local];
+    }
     const lines: string[] = [];
     const labeled: { digit: number; glyph: Glyph; from: string }[] = [];
     for (const s of manifest.samples) {
