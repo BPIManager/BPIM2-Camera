@@ -1,4 +1,8 @@
+import { useState } from "react";
 import Button from "@/components/ui/button";
+import type { Size } from "@/lib/vision/framing";
+import { resolveLayout } from "@/lib/vision/guides";
+import GuideEditor from "./GuideEditor";
 import Label from "@/components/ui/label";
 import { RadioGroup, RadioItem } from "@/components/ui/radio-group";
 import Switch from "@/components/ui/switch";
@@ -9,6 +13,7 @@ import type { Settings } from "@/lib/storage/settings";
 interface Props {
   settings: Settings;
   update: (patch: Partial<Settings>) => void;
+  viewSize: Size;
 }
 
 function Row({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
@@ -23,7 +28,8 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint?: 
   );
 }
 
-export default function SettingsView({ settings, update }: Props) {
+export default function SettingsView({ settings, update, viewSize }: Props) {
+  const [editingGuides, setEditingGuides] = useState(false);
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 pb-8">
       <div className="flex flex-col gap-2 border-b border-border py-3">
@@ -34,6 +40,27 @@ export default function SettingsView({ settings, update }: Props) {
           <RadioItem value="2P">2P</RadioItem>
         </RadioGroup>
       </div>
+      <div className="flex items-center justify-between gap-4 border-b border-border py-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <Label>撮影枠の位置</Label>
+          <p className="text-xs text-muted-foreground">好きなリザルト画像を背景に、スコアと曲名の枠を合わせます</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setEditingGuides(true)}>
+          調整
+        </Button>
+      </div>
+      {editingGuides && (
+        <GuideEditor
+          side={settings.playSide}
+          initial={resolveLayout(settings.playSide, settings.guides)}
+          viewSize={viewSize}
+          onClose={() => setEditingGuides(false)}
+          onSave={(layout) => {
+            update({ guides: { ...settings.guides, [settings.playSide]: layout } });
+            setEditingGuides(false);
+          }}
+        />
+      )}
       <Row id="auto" label="自動撮影" hint="静止して画面が読めたら自動で読み取ります">
         <Switch id="auto" checked={settings.autoCapture} onCheckedChange={(v) => update({ autoCapture: v })} />
       </Row>

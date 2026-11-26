@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, History, Settings as SettingsIcon } from "lucide-react";
 import CameraView from "@/features/camera/CameraView";
 import HistoryView from "@/features/history/HistoryView";
@@ -30,6 +30,9 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("camera");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
+  // カメラ表示領域の大きさ。設定の枠調整が同じ縦横比で表示するために保持する
+  const [viewSize, setViewSize] = useState({ width: window.innerWidth, height: Math.max(200, window.innerHeight - 170) });
+  const onViewSize = useCallback((s: { width: number; height: number }) => s.width > 0 && setViewSize(s), []);
   const songsRef = useRef<readonly SongMasterEntry[]>(songs);
   songsRef.current = songs;
   const recognizerRef = useRef<TesseractRecognizer | null>(null);
@@ -77,9 +80,9 @@ export default function App() {
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col">
       <main className="min-h-0 flex-1">
-        {tab === "camera" && <CameraView active={draft === null} busy={busy} side={settings.playSide} onCapture={handleCapture} />}
+        {tab === "camera" && <CameraView active={draft === null} busy={busy} side={settings.playSide} guides={settings.guides} onViewSize={onViewSize} onCapture={handleCapture} />}
         {tab === "history" && <HistoryView active />}
-        {tab === "settings" && <SettingsView settings={settings} update={update} />}
+        {tab === "settings" && <SettingsView settings={settings} update={update} viewSize={viewSize} />}
       </main>
       <nav className="grid grid-cols-3 border-t border-border pb-[env(safe-area-inset-bottom)]">
         {TABS.map(({ id, label, Icon }) => (

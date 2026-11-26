@@ -3,18 +3,21 @@ import { ImagePlus } from "lucide-react";
 import Button from "@/components/ui/button";
 import { useCamera } from "@/hooks/useCamera";
 import type { Size } from "@/lib/vision/framing";
-import { guideRects } from "@/lib/vision/guides";
+import { guideRects, type CustomGuides } from "@/lib/vision/guides";
 import type { PlaySide } from "@/lib/storage/settings";
 
 interface Props {
   active: boolean;
   busy: boolean;
   side: PlaySide;
+  guides: CustomGuides;
+  /** 表示領域の大きさ。設定の枠調整で同じ縦横比を使う */
+  onViewSize: (size: Size) => void;
   onCapture: (image: Blob, source: "camera" | "import", regions?: { score: Blob; title: Blob }) => void;
 }
 
 /** スコアと曲名帯の位置を白枠で示す（1P/2P で左右反転）。シャッター時は各枠の中を切り出して読み取る */
-export default function CameraView({ active, busy, side, onCapture }: Props) {
+export default function CameraView({ active, busy, side, guides, onViewSize, onCapture }: Props) {
   const { videoRef, state, snapshot } = useCamera(active);
   const fileRef = useRef<HTMLInputElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
@@ -23,13 +26,18 @@ export default function CameraView({ active, busy, side, onCapture }: Props) {
   useEffect(() => {
     const el = viewRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setView({ width: el.clientWidth, height: el.clientHeight }));
+    const measure = () => {
+      const size = { width: el.clientWidth, height: el.clientHeight };
+      setView(size);
+      onViewSize(size);
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setView({ width: el.clientWidth, height: el.clientHeight });
+    measure();
     return () => ro.disconnect();
-  }, []);
+  }, [onViewSize]);
 
-  const rects = guideRects(side, view);
+  const rects = guideRects(side, view, guides);
 
   return (
     <div className="relative flex h-full flex-col bg-background">
