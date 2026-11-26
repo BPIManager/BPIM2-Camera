@@ -19,7 +19,7 @@ function guessTitle(tokens: readonly OcrToken[]): string | null {
  */
 export function rawFromTokens(tokens: readonly OcrToken[], master: readonly SongMasterEntry[]): RawResult | null {
   const hints = parseChartHints(tokens);
-  const nums = numberTokens(tokens);
+  const nums = withoutOne(numberTokens(tokens), hints.notes);
   if (hints.difficulty === null && hints.notes === null && nums.length === 0) return null;
 
   const match = matchChart(master, { ...hints, titleText: guessTitle(tokens) });
@@ -49,4 +49,11 @@ export function rawFromTokens(tokens: readonly OcrToken[], master: readonly Song
     isNewRecord: false,
     exCandidates: confirmed ? [] : candidates,
   };
+}
+
+/** 「1857 NOTES」の数字が EX や判定として二重に数えられないよう、ノーツ数の 1 件を除く */
+function withoutOne(nums: number[], value: number | null): number[] {
+  if (value === null) return nums;
+  const i = nums.indexOf(value);
+  return i < 0 ? nums : [...nums.slice(0, i), ...nums.slice(i + 1)];
 }

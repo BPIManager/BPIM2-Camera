@@ -18,8 +18,8 @@ export function solveJudge(numbers: readonly number[], notes: number): JudgeSolu
   const present = new Set(numbers);
   const found: JudgeSolution[] = [];
 
-  for (const pg of pool) {
-    for (const gr of pool) {
+  for (const pg of pool.filter((n) => n > 0 && present.has(n))) {
+    for (const gr of pool.filter((n) => n === 0 || present.has(n))) {
       const rest = notes - pg - gr;
       if (rest < 0) continue;
       const tail = splitRest(rest, pool, poolSet);

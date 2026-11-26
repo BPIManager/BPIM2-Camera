@@ -48,3 +48,10 @@ describe("rawFromTokens + resolveResult", () => {
     expect(rawFromTokens(toks("@@", "~"), master)).toBeNull();
   });
 });
+
+describe("誤確定の防止", () => {
+  it("ノーツ数の表記（1857 NOTES）を EX と取り違えて確定しない", () => {
+    const raw = rawFromTokens(toks("Lost Summer", "1857", "NOTES", "2891"), master);
+    expect(raw?.exScore.value ?? null).toBeNull();
+  });
+});
