@@ -13,9 +13,11 @@ export function rawFromRegions(
   titleTokens: readonly OcrToken[],
   scoreReadings: readonly (readonly string[])[],
   master: readonly SongMasterEntry[],
+  /** 日本語 OCR で読んだ曲名の 1 行（文字ごとに分かれたトークンを連結したもの） */
+  japaneseTitle?: string,
 ): RawResult | null {
   const hints = parseChartHints(titleTokens);
-  const titleText = guessTitle(titleTokens);
+  const titleText = japaneseTitle?.trim() || guessTitle(titleTokens);
   const match = matchChart(master, { ...hints, titleText });
   // 曲名の弱い一致で範囲を狭めると正しい EX まで除外するので、確定した譜面のノーツ数だけを使う
   const notes = hints.notes ?? (match.confident ? match.candidates[0].entry.notes : null);
@@ -40,4 +42,11 @@ export function rawFromRegions(
     isNewRecord: false,
     exCandidates: vote.value !== null ? [] : vote.candidates,
   };
+}
+
+/** 難易度・レベル・ノーツ数の読み取りだけで譜面が 1 件に絞れるか。絞れれば日本語 OCR は不要 */
+export function chartResolvedByHints(titleTokens: readonly OcrToken[], master: readonly SongMasterEntry[]): boolean {
+  const hints = parseChartHints(titleTokens);
+  if (hints.notes === null || hints.difficulty === null || hints.level === null) return false;
+  return matchChart(master, { ...hints, titleText: null }).confident;
 }

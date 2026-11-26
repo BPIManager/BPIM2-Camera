@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rawFromRegions } from "@/lib/recognition/fromRegions";
+import { chartResolvedByHints, rawFromRegions } from "@/lib/recognition/fromRegions";
 import { resolveResult } from "@/lib/recognition/resolve";
 import { voteScore } from "@/lib/recognition/scoreVote";
 import { GUIDE_LAYOUTS, guideRects } from "@/lib/vision/guides";
@@ -60,5 +60,25 @@ describe("誤確定の防止（実測で見つかった条件）", () => {
   it("曲の確定が弱いときは範囲で正しい EX を除外しない", () => {
     const raw = rawFromRegions(toks("Eurobeat"), [["3365"], ["12"]], master);
     expect(raw!.exCandidates).toContain(3365);
+  });
+});
+
+describe("日本語の曲名", () => {
+  const jpMaster = [
+    ...master,
+    { songId: 20, title: "フランケンシュタインの怪物", playStyle: "SP" as const, difficulty: "ANOTHER" as const, level: 9, notes: 883 },
+    { songId: 21, title: "ダミー曲", playStyle: "SP" as const, difficulty: "ANOTHER" as const, level: 9, notes: 700 },
+  ];
+
+  it("日本語 OCR の文字間の空白や 1 文字の誤読があっても曲を特定する", () => {
+    const raw = rawFromRegions(toks("ANOTHER 9"), [["1751"], ["1751"]], jpMaster, "フランケンシュタインの 怪 物");
+    expect(resolveResult(raw!, jpMaster).chart?.title).toBe("フランケンシュタインの怪物");
+    const typo = rawFromRegions(toks("ANOTHER 9"), [["1751"], ["1751"]], jpMaster, "フランケンシユタインの怪物");
+    expect(resolveResult(typo!, jpMaster).chart?.songId).toBe(20);
+  });
+
+  it("難易度・レベル・ノーツ数で絞れるなら日本語 OCR は不要と判定する", () => {
+    expect(chartResolvedByHints(toks("ANOTHER 9", "0883 NOTES"), jpMaster)).toBe(true);
+    expect(chartResolvedByHints(toks("ANOTHER 9"), jpMaster)).toBe(false);
   });
 });
