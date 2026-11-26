@@ -94,7 +94,7 @@ describe("readNumber", () => {
     const mask = new Uint8Array(w * h);
     for (let y = 5; y < 55; y++) for (let x = 10; x < 30; x++) mask[y * w + x] = 1;
     const g = segmentGlyphs(mask, w, h);
-    expect(readNumber({ ...model, templates: model.templates.filter((t) => t.digit === 1) }, g)).toBeNull();
+    expect(readNumber({ ...model, templates: model.templates.filter((t) => t.digit === 0) }, g)).toBeNull();
   });
 
   it("モデルの寸法が違えば使わない", () => {
