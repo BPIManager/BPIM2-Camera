@@ -7,3 +7,4 @@ dist
 .wrangler
 *.tsbuildinfo
 eval-out.txt
+*.traineddata
