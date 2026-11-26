@@ -6,6 +6,8 @@ export interface Draft {
   id: string;
   image: Blob;
   source: "camera" | "import";
+  /** ガイド枠で切り出したスコア部と曲名帯（カメラ撮影のみ）。学習サンプルの元 */
+  regions?: { score: Blob; title: Blob };
   raw: RawResult | null;
   resolution: Resolution | null;
 }

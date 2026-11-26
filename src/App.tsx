@@ -72,6 +72,7 @@ export default function App() {
       id: crypto.randomUUID(),
       image,
       source,
+      regions,
       raw,
       resolution: raw ? resolveResult(raw, songs) : null,
     });

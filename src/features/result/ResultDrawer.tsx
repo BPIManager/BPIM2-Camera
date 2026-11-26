@@ -6,6 +6,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/compone
 import Input from "@/components/ui/input";
 import Label from "@/components/ui/label";
 import { saveResult } from "@/lib/storage/history";
+import { saveSample } from "@/lib/storage/samples";
 import { saveImage } from "@/lib/share/save";
 import { shareResult } from "@/lib/share/share";
 import { buildShareText } from "@/lib/share/text";
@@ -35,6 +36,20 @@ export default function ResultDrawer({ draft, songs, settings, onClose }: Props)
   const commit = async () => {
     if (!ed.record) return;
     await saveResult(ed.record, draft.image);
+    // 統計への同意があるときだけ、確認済みの値を正解ラベルとして学習サンプルを貯める
+    if (settings.statsConsent === true && draft.regions) {
+      await saveSample({
+        id: ed.record.id,
+        createdAt: ed.record.createdAt,
+        playSide: settings.playSide,
+        chart: ed.record.chart,
+        exScore: ed.record.exScore,
+        autoConfirmed: ed.record.correctedFields.length === 0 && draft.resolution?.autoConfirm === true,
+        correctedFields: ed.record.correctedFields,
+        scoreCrop: draft.regions.score,
+        titleCrop: draft.regions.title,
+      });
+    }
     if (settings.saveToCameraRoll && draft.source === "camera") {
       await saveImage(draft.image, `iidx-${ed.record.createdAt}.jpg`);
     }
