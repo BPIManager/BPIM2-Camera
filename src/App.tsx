@@ -6,6 +6,7 @@ import InstallDialog from "@/features/install/InstallDialog";
 import Onboarding from "@/features/onboarding/Onboarding";
 import ResultDrawer from "@/features/result/ResultDrawer";
 import SettingsView from "@/features/settings/SettingsView";
+import DownloadProgress from "@/features/ocr/DownloadProgress";
 import TabBar, { TABS, type Tab } from "@/features/shell/TabBar";
 import UnsavedImageDialog from "@/features/shell/UnsavedImageDialog";
 import { useCaptureReader } from "@/hooks/useCaptureReader";
@@ -27,7 +28,7 @@ export default function App() {
   useDebugMode(settings.debugMode);
   const { songs } = useMaster();
   // セットアップ中も、OCR のモデルを読み込んでおく（処理を決めるベンチマークの前は、まだ作らない）
-  const getRecognizer = useOcrEngine(songs, settings.ocrBackend, settings.onboarded || settings.ocrBackend !== null);
+  const { getRecognizer, backend } = useOcrEngine(songs, settings.ocrBackend, settings.onboarded || settings.ocrBackend !== null);
   const reader = useCaptureReader({ getRecognizer, songs, settings });
   const install = useInstallPrompt(settings.onboarded);
   const [tab, setTab] = useState<Tab>("camera");
@@ -35,7 +36,14 @@ export default function App() {
   const [viewSize, setViewSize] = useState<Size>({ width: window.innerWidth, height: Math.max(200, window.innerHeight - 170) });
   const onViewSize = useCallback((s: Size) => s.width > 0 && setViewSize(s), []);
 
-  if (!settings.onboarded) return <Onboarding settings={settings} update={update} viewSize={viewSize} />;
+  // モデルの取得の進み具合は、セットアップ中（ベンチマーク）も出す
+  if (!settings.onboarded)
+    return (
+      <>
+        <Onboarding settings={settings} update={update} viewSize={viewSize} />
+        <DownloadProgress />
+      </>
+    );
 
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col">
@@ -59,14 +67,16 @@ export default function App() {
             autoCapture={settings.autoCapture}
             cameraId={settings.cameraId}
             onLayoutChange={(l) => update({ layout: l })}
+            ocrBackend={backend}
           />
         )}
         {tab === "history" && <HistoryView active />}
-        {tab === "settings" && <SettingsView settings={settings} update={update} viewSize={viewSize} installable={install.installable} onOpenInstall={install.show} />}
+        {tab === "settings" && <SettingsView settings={settings} update={update} viewSize={viewSize} installable={install.installable} onOpenInstall={install.show} ocrBackend={backend} />}
       </main>
       <TabBar tab={tab} onChange={setTab} />
       <UnsavedImageDialog image={reader.unsaved} onClose={reader.clearUnsaved} />
       <Toaster position="top-center" theme="dark" offset="calc(env(safe-area-inset-top) + 0.75rem)" toastOptions={{ classNames: { toast: "!border-border !bg-card !text-foreground", description: "!text-muted-foreground" } }} />
+      <DownloadProgress />
       {install.open && <InstallDialog mode={install.mode} onClose={install.close} />}
       {reader.draft && <ResultDrawer key={reader.draft.id} draft={reader.draft} songs={songs} settings={settings} onClose={reader.closeDraft} />}
     </div>

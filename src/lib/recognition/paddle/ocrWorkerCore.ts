@@ -1,13 +1,28 @@
 /// <reference lib="webworker" />
 import * as ort from "onnxruntime-web";
-import { PaddleOcrService, type ModelUrls } from "ppu-paddle-ocr/web";
+import { PaddleOcrService } from "ppu-paddle-ocr/web";
+import { MODEL_FALLBACK, MODEL_FILES, type ModelFiles, type ModelSet } from "../assets";
+import { loadAsset, type AssetProgress } from "../assetStore";
 import type { OcrImage, OcrLine } from "./engine";
 import { hasWebGpu } from "./webgpu";
 
-/** 推論に使うもの。wasm は CPU、webgpu は GPU（onnxruntime-web の WebGPU 版が要る） */
+/** 推論に使うもの。wasm は CPU、webgpu は GPU（WebGPU も使える版の Worker でだけ使える） */
 export type OcrExecutionProvider = "wasm" | "webgpu";
 
-type Request = { id: number; type: "warmup" } | { id: number; type: "config"; threads?: number; ep?: OcrExecutionProvider; models?: Partial<ModelUrls> } | { id: number; type: "read"; image: OcrImage };
+/** Worker の設定。最初のメッセージで送る（モデルを読み込む前に決める） */
+export interface OcrWorkerConfig {
+  threads?: number;
+  ep?: OcrExecutionProvider;
+  /** 読むモデルの組。既定は small */
+  models?: ModelSet;
+  /** モデルの取得先の差し替え（ベンチマーク用） */
+  modelUrls?: Partial<ModelFiles>;
+}
+
+type Request = { id: number; type: "warmup" } | ({ id: number; type: "config" } & OcrWorkerConfig) | { id: number; type: "read"; image: OcrImage };
+
+/** 結果のキャッシュを使わない指定（型に無いので、行ごとの結果を返す呼び方の型に合わせる） */
+const NO_CACHE = { noCache: true } as unknown as { flatten?: false };
 
 /**
  * WebGPU は、推論のセッションを 1 つずつしか作れない。ライブラリは検出と認識のセッションを同時に作るので、
@@ -26,9 +41,6 @@ function serializeSessionCreation() {
   };
 }
 
-/** 結果のキャッシュを使わない指定（型に無いので、行ごとの結果を返す呼び方の型に合わせる） */
-const NO_CACHE = { noCache: true } as unknown as { flatten?: false };
-
 /** 画素を、OCR が読めるキャンバスにする（PNG の復号を省く） */
 function toCanvas(image: ImageData): OffscreenCanvas {
   const c = new OffscreenCanvas(image.width, image.height);
@@ -36,51 +48,52 @@ function toCanvas(image: ImageData): OffscreenCanvas {
   return c;
 }
 
-/**
- * OCR を動かす Worker の本体。モデルだけ差し替えて、small（本読み）と tiny（自動撮影の下見）で共用する。
- * local は自前配信のモデル（pnpm models:fetch で public/models/paddle に置く）。なければ fallback の取得先を使う。
- */
-export function startOcrWorker(models: { local: ModelUrls; fallback: ModelUrls }) {
-  async function hasLocalModels(): Promise<boolean> {
-    try {
-      const res = await fetch(models.local.detection, { method: "HEAD" });
-      return res.ok && !(res.headers.get("content-type") ?? "").includes("text/html");
-    } catch {
-      return false;
-    }
+/** 自前のモデルが置かれているか（開発中など、置かれていなければ外部から取得する） */
+async function hasLocalModels(files: ModelFiles): Promise<boolean> {
+  try {
+    const res = await fetch(files.detection, { method: "HEAD" });
+    return res.ok && !(res.headers.get("content-type") ?? "").includes("text/html");
+  } catch {
+    return false;
   }
+}
 
+/**
+ * OCR を動かす Worker の本体。ランタイム（WASM）の URL だけ違えて、CPU 用・GPU 用の Worker で共用する。
+ * ランタイムとモデルは、アプリのキャッシュから読み、なければ取得する（取得の進み具合をページに知らせる）
+ */
+export function startOcrWorker(runtimeUrl: string) {
+  let config: OcrWorkerConfig = {};
   let ready: Promise<PaddleOcrService> | null = null;
-  /**
-   * 未指定なら、WebGPU が使えれば WebGPU、なければ WASM。ライブラリの既定は CPU に固定されているので、ここで選ぶ。
-   * WebGPU でセッションを作れなければ、ライブラリが CPU に切り替える
-   */
-  let backend: OcrExecutionProvider | null = null;
-  /** モデルの取得先の差し替え（ベンチマークで、WebGPU 用の ONNX 形式を試すため） */
-  let override: Partial<ModelUrls> = {};
+  const report = (progress: AssetProgress) => self.postMessage({ id: 0, progress });
+
   function ensure(): Promise<PaddleOcrService> {
     ready ??= (async () => {
-      const service = new PaddleOcrService({
-        model: { ...((await hasLocalModels()) ? models.local : models.fallback), ...override },
-        session: { executionProviders: [backend ?? ((await hasWebGpu()) ? "webgpu" : "wasm")] },
-      });
+      const set = config.models ?? "small";
+      const urls = { ...((await hasLocalModels(MODEL_FILES[set])) ? MODEL_FILES[set] : MODEL_FALLBACK[set]), ...config.modelUrls };
+      // ランタイムとモデルを、キャッシュから（なければ取得して）読む
+      const [wasm, detection, recognition, charactersDictionary] = await Promise.all([runtimeUrl, urls.detection, urls.recognition, urls.charactersDictionary].map((u) => loadAsset(u, report)));
+      ort.env.wasm.wasmBinary = wasm;
+      // 未指定なら、WebGPU が使えれば WebGPU。ライブラリの既定は CPU に固定されているので、ここで選ぶ。
+      // WebGPU でセッションを作れなければ、ライブラリが CPU に切り替える
+      const ep = config.ep ?? ((await hasWebGpu()) ? "webgpu" : "wasm");
+      const service = new PaddleOcrService({ model: { detection, recognition, charactersDictionary }, session: { executionProviders: [ep] } });
       await service.initialize();
       return service;
     })();
     return ready;
   }
 
-  // WebGPU を使うとき（明示・既定のどちらでも）に備え、セッションは 1 つずつ作る（WASM でも害はない）
+  // WebGPU を使うときに備え、セッションは 1 つずつ作る（WASM でも害はない）
   serializeSessionCreation();
 
   self.onmessage = async (event: MessageEvent<Request>) => {
     const msg = event.data;
-    // スレッド数は、モデルを読み込む前（最初のメッセージ）に決める。返事はしない
+    // 設定は、モデルを読み込む前（最初のメッセージ）に決める。返事はしない
     if (msg.type === "config") {
-      if (msg.threads) ort.env.wasm.numThreads = msg.threads;
-      if (msg.ep) backend = msg.ep;
-      if (msg.models) override = msg.models;
-
+      const { id: _id, type: _type, ...rest } = msg;
+      config = rest;
+      if (rest.threads) ort.env.wasm.numThreads = rest.threads;
       return;
     }
     try {

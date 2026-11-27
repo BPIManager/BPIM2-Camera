@@ -61,7 +61,7 @@ The camera path crops three regions with the guide frames and reads them with Pa
 
 The OCR trace (which pass produced what) is kept with each training sample and shown in debug mode.
 
-Models: `public/models/paddle` (small ≈ 31 MB as `.onnx` so WebGPU can load it, tiny ≈ 6 MB as `.ort`; fetched by `pnpm models:fetch`, served from the app so it works offline). `public/models/digits.json` is a small nearest-neighbor digit classifier kept as an extra vote.
+Models: `public/models/paddle` (small ≈ 31 MB as `.onnx` so WebGPU can load it, tiny ≈ 6 MB as `.ort`; fetched by `pnpm models:fetch`, served from the app so it works offline). `public/models/digits.json` is a small nearest-neighbor digit classifier kept as an extra vote. The app downloads and caches the models and the onnxruntime-web runtime itself (Cache Storage `bpim2-ocr-assets-v1`, with a download progress toast); the CPU workers use the WASM-only runtime (≈ 15 MB) and the GPU worker the WebGPU runtime (≈ 29 MB), so only the one in use is fetched. Unused files can be deleted in Settings.
 
 ### Flow
 

@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { logDebug } from "@/lib/debug/ocrLog";
-import {
-  createTinyWorker,
-  WorkerOcrEngine,
-} from "@/lib/recognition/paddle/workerEngine";
+import type { OcrBackend } from "@/lib/recognition/ocrSetup";
+import { createOcrWorker, WorkerOcrEngine } from "@/lib/recognition/paddle/workerEngine";
 import {
   AutoCaptureGate,
   POLL_INTERVAL_MS,
@@ -17,6 +15,8 @@ import type { GuideKey, GuideRects } from "@/lib/vision/guides";
 interface Args {
   /** 下見を使えるか（自動撮影がオンで、カメラが映っているとき）。この間、tiny の OCR を保持する */
   enabled: boolean;
+  /** 本読みの処理。下見の Worker も、同じ版の onnxruntime-web を使う */
+  backend: OcrBackend;
   /** 一時停止（読み取り中）。OCR は保持したまま、下見だけ止める */
   paused: boolean;
   grabGray: () => Gray | null;
@@ -41,6 +41,7 @@ export function useAutoCapture({
   grabRegions,
   guides,
   onTrigger,
+  backend,
 }: Args): boolean {
   const [detected, setDetected] = useState(false);
   // 下見の最中に最新の値を使えるよう、ref に持つ（下見のたびに作り直さない）
@@ -49,8 +50,9 @@ export function useAutoCapture({
 
   useEffect(() => {
     if (!enabled) return;
-    // 下見は軽い tiny を CPU で読む（.ort 形式。GPU は本読みに空けておく）
-    const engine = new WorkerOcrEngine(createTinyWorker, { ep: "wasm" });
+    // 下見は軽い tiny を CPU で読む（.ort 形式。GPU は本読みに空けておく）。
+    // Worker は本読みと同じ版にする（使わないほうのランタイムを取得しないため。GPU 用の版でも CPU で読める）
+    const engine = new WorkerOcrEngine(createOcrWorker(backend), { ep: "wasm", models: "tiny" });
     const gate = new AutoCaptureGate();
     let prev: Gray | null = null;
     let wasPaused = false;
@@ -112,7 +114,7 @@ export function useAutoCapture({
       engine.dispose();
       setDetected(false);
     };
-  }, [enabled]);
+  }, [enabled, backend]);
 
   return enabled && !paused && detected;
 }
