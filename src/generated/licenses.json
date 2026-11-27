@@ -654,12 +654,6 @@
   "homepage": "https://github.com/theKashey/aria-hidden#readme"
  },
  {
-  "name": "bmp-js",
-  "version": "0.1.0",
-  "license": "MIT",
-  "homepage": "https://github.com/shaozilee/bmp-js#readme"
- },
- {
   "name": "cjs-module-lexer",
   "version": "2.3.0",
   "license": "MIT",
@@ -846,12 +840,6 @@
   "homepage": "https://github.com/jakearchibald/idb#readme"
  },
  {
-  "name": "idb-keyval",
-  "version": "6.3.0",
-  "license": "Apache-2.0",
-  "homepage": "https://github.com/jakearchibald/idb-keyval#readme"
- },
- {
   "name": "import-in-the-middle",
   "version": "3.7.0",
   "license": "Apache-2.0",
@@ -862,12 +850,6 @@
   "version": "3.0.0",
   "license": "MIT",
   "homepage": "https://github.com/sindresorhus/is-fullwidth-code-point#readme"
- },
- {
-  "name": "is-url",
-  "version": "1.2.4",
-  "license": "MIT",
-  "homepage": "https://github.com/segmentio/is-url#readme"
  },
  {
   "name": "lodash.camelcase",
@@ -906,12 +888,6 @@
   "homepage": "https://github.com/vercel/ms#readme"
  },
  {
-  "name": "node-fetch",
-  "version": "2.7.0",
-  "license": "MIT",
-  "homepage": "https://github.com/bitinn/node-fetch"
- },
- {
   "name": "object-keys",
   "version": "1.1.1",
   "license": "MIT",
@@ -934,12 +910,6 @@
   "version": "1.31.1",
   "license": "MIT",
   "homepage": "https://github.com/Microsoft/onnxruntime#readme"
- },
- {
-  "name": "opencollective-postinstall",
-  "version": "2.0.3",
-  "license": "MIT",
-  "homepage": "https://github.com/opencollective/opencollective-postinstall#readme"
  },
  {
   "name": "platform",
@@ -1008,12 +978,6 @@
   "homepage": "https://react-window.vercel.app/"
  },
  {
-  "name": "regenerator-runtime",
-  "version": "0.13.11",
-  "license": "MIT",
-  "homepage": "https://github.com/facebook/regenerator/tree/main#readme"
- },
- {
   "name": "require-directory",
   "version": "2.1.1",
   "license": "MIT",
@@ -1074,24 +1038,6 @@
   "homepage": "https://github.com/dcastil/tailwind-merge"
  },
  {
-  "name": "tesseract.js",
-  "version": "7.0.0",
-  "license": "Apache-2.0",
-  "homepage": "https://github.com/naptha/tesseract.js"
- },
- {
-  "name": "tesseract.js-core",
-  "version": "7.0.0",
-  "license": "Apache-2.0",
-  "homepage": "https://github.com/naptha/tesseract.js-core"
- },
- {
-  "name": "tr46",
-  "version": "0.0.3",
-  "license": "MIT",
-  "homepage": "https://github.com/Sebmaster/tr46.js#readme"
- },
- {
   "name": "tslib",
   "version": "2.9.1",
   "license": "0BSD",
@@ -1128,12 +1074,6 @@
   "homepage": "https://vaul.emilkowal.ski/"
  },
  {
-  "name": "wasm-feature-detect",
-  "version": "1.10.1",
-  "license": "Apache-2.0",
-  "homepage": "https://github.com/GoogleChromeLabs/wasm-feature-detect#readme"
- },
- {
   "name": "web-vitals",
   "version": "4.2.4",
   "license": "Apache-2.0",
@@ -1146,12 +1086,6 @@
   "homepage": "https://github.com/GoogleChrome/web-vitals#readme"
  },
  {
-  "name": "webidl-conversions",
-  "version": "3.0.1",
-  "license": "BSD-2-Clause",
-  "homepage": "https://github.com/jsdom/webidl-conversions#readme"
- },
- {
   "name": "websocket-driver",
   "version": "0.8.0",
   "license": "Apache-2.0",
@@ -1162,12 +1096,6 @@
   "version": "0.2.0",
   "license": "Apache-2.0",
   "homepage": "http://github.com/faye/websocket-extensions-node"
- },
- {
-  "name": "whatwg-url",
-  "version": "5.0.0",
-  "license": "MIT",
-  "homepage": "https://github.com/jsdom/whatwg-url#readme"
  },
  {
   "name": "wrap-ansi",
@@ -1192,11 +1120,5 @@
   "version": "21.1.1",
   "license": "ISC",
   "homepage": "https://github.com/yargs/yargs-parser#readme"
- },
- {
-  "name": "zlibjs",
-  "version": "0.3.1",
-  "license": "MIT",
-  "homepage": "https://github.com/imaya/zlib.js"
  }
 ]

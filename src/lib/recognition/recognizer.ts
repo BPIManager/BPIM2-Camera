@@ -32,9 +32,9 @@ export interface OcrStep {
 }
 
 export interface RecognizeInput {
-  /** 撮影した全体画像（履歴・シェア用）。領域がないとき（画像取り込み）はこれ全体を読む */
+  /** 撮影・取り込んだ全体画像（履歴・シェア用） */
   full: ImageBitmap;
-  /** ガイド枠で切り出したスコア部・曲名帯・判定表。カメラ撮影のときだけ渡る */
+  /** ガイド枠で切り出したスコア部・曲名帯・判定表（撮影も取り込みも、枠で切り出して渡す） */
   regions?: Record<GuideKey, ImageBitmap>;
   /** いま何をしているか（画面の進行表示用）。段階が変わるたびに呼ばれる */
   onStage?: (label: string) => void;

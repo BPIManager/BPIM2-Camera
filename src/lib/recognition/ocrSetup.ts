@@ -1,8 +1,8 @@
-import { TesseractRecognizer } from "./ocr/tesseractRecognizer";
 import { EnginePool } from "./paddle/enginePool";
 import { PaddleRecognizer } from "./paddle/paddleRecognizer";
 import { createOcrWorker, WorkerOcrEngine } from "./paddle/workerEngine";
 import type { Recognizer } from "./recognizer";
+import type { OcrEngine } from "./paddle/engine";
 import type { SongMasterEntry } from "@/lib/songs/types";
 
 /** 読み取りの処理。gpu は WebGPU、cpu は WASM（マルチスレッド） */
@@ -11,6 +11,8 @@ export type OcrBackend = "gpu" | "cpu";
 export interface OcrSetup {
   backend: OcrBackend;
   recognizer: Recognizer;
+  /** 曲名を読む Worker（取り込んだ画像の全体を読んで、枠の位置を推定するのにも使う） */
+  engine: OcrEngine;
   /** モデルの読み込みを済ませておく。実際に使っている処理を返す（GPU を頼んでも、使えなければ CPU になる） */
   warmUp(): Promise<OcrBackend>;
   /** Worker を止めて、メモリを返す */
@@ -27,14 +29,15 @@ export function createOcrSetup(backend: OcrBackend, getMaster: () => readonly So
   const titleWorker = new WorkerOcrEngine(createOcrWorker(backend), { ep });
   const passWorker = backend === "cpu" ? new WorkerOcrEngine(createOcrWorker(backend), { ep }) : undefined;
   const workers = passWorker ? [titleWorker, passWorker] : [titleWorker];
-  // 枠で撮った画像は PaddleOCR、全体画像の取り込みは Tesseract で読む
-  const recognizer = new PaddleRecognizer(titleWorker, getMaster, new TesseractRecognizer(getMaster), {
+  // 撮影も取り込みも、枠で切り出した 3 か所を PaddleOCR で読む
+  const recognizer = new PaddleRecognizer(titleWorker, getMaster, {
     passEngine: passWorker && new EnginePool([passWorker]),
     ahead: passWorker ? Number.POSITIVE_INFINITY : 0,
   });
   return {
     backend,
     recognizer,
+    engine: titleWorker,
     warmUp: async () => {
       await Promise.all(workers.map((w) => w.warmUp()));
       return titleWorker.provider === "webgpu" ? "gpu" : "cpu";

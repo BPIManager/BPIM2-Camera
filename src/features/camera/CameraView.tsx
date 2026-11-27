@@ -24,7 +24,9 @@ interface Props {
   layoutAspect: number | null;
   /** 表示領域の大きさ。設定の枠調整で同じ縦横比を使う */
   onViewSize: (size: Size) => void;
-  onCapture: (image: Blob, source: "camera" | "import", regions?: Record<GuideKey, Blob>) => void;
+  onCapture: (image: Blob, source: "camera", regions?: Record<GuideKey, Blob>) => void;
+  /** 画像を取り込んだとき（枠を合わせるステップに進む） */
+  onImport: (image: Blob) => void;
   /** 読み取りの中止（読み取り中にシャッターボタンを押したとき） */
   onCancel: () => void;
   /** 自動撮影（静止して、枠に画面が合ったら、自動で読み取りを始める） */
@@ -47,7 +49,7 @@ const CORNERS: { corner: Corner; pos: string }[] = [
 type Drag = { key: GuideKey; mode: "move" | Corner; x: number; y: number; start: GuideLayout[GuideKey] };
 
 /** スコアと曲名帯の位置を白枠で示す。シャッター時は各枠の中を切り出して読み取る */
-export default function CameraView({ active, busy, stage, song, layout, layoutAspect, onViewSize, onCapture, onCancel, autoCapture, cameraId, onLayoutChange, ocrBackend }: Props) {
+export default function CameraView({ active, busy, stage, song, layout, layoutAspect, onViewSize, onCapture, onCancel, autoCapture, cameraId, onLayoutChange, ocrBackend, onImport }: Props) {
   const { videoRef, state, snapshot, zoom, zoomInfo, setZoom, grabGray, grabRegions } = useCamera(active, cameraId);
   const fileRef = useRef<HTMLInputElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
@@ -311,7 +313,7 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
             const f = e.target.files?.[0];
             if (f) {
               setFrozen(null);
-              onCapture(f, "import");
+              onImport(f);
             }
             e.target.value = "";
           }}
