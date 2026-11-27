@@ -63,6 +63,60 @@ The OCR trace (which pass produced what) is kept with each training sample and s
 
 Models: `public/models/paddle` (small ≈ 31 MB, tiny ≈ 6 MB; fetched by `pnpm models:fetch`, served from the app so it works offline). `public/models/digits.json` is a small nearest-neighbor digit classifier kept as an extra vote.
 
+### Flow
+
+```mermaid
+flowchart TD
+    A["Capture or import"] --> B{"Crops from the<br/>guide frames?"}
+    B -- "No (imported image)" --> F["Fallback recognizer<br/>(Tesseract, whole image)"]
+    B -- "Yes (camera)" --> T1
+
+    subgraph TITLE ["1. Song-title band"]
+        T1["gray, 1200 px"] --> Q1{"Song resolved?"}
+        Q1 -- "No, and difficulty or<br/>title text missing" --> T2["raw, 900 px"]
+        T2 --> Q2{"Song resolved?"}
+        Q2 -- "No" --> D["Estimate tilt (±15°)<br/>and rotate the crop"]
+        D --> T3["deskewed: gray 1200 px"]
+        T3 --> Q3{"Song resolved?"}
+        Q3 -- "No" --> T4["deskewed: raw 900 px"]
+    end
+
+    Q1 -- "Yes" --> J1
+    Q2 -- "Yes" --> J1
+    Q3 -- "Yes" --> J1
+    T4 --> J1
+
+    J1["2. Judge table, 700 px"] --> S1
+
+    subgraph SCORE ["3. EX score (stops at the first pass that decides it)"]
+        S1["cyan digits, 700 px"] --> E1{"EX decided?"}
+        E1 -- "No" --> S2["cyan digits only the digit row, 700 px"]
+        S2 --> E2{"EX decided?"}
+        E2 -- "No" --> S3["loose cyan, 700 px"]
+        S3 --> E3{"EX decided?"}
+        E3 -- "No" --> S4["raw, 400 px"]
+    end
+
+    E1 -- "Yes" --> R
+    E2 -- "Yes" --> R
+    E3 -- "Yes" --> R
+    S4 --> E4{"EX decided?"}
+    E4 -- "No" --> J2["Re-read judge table<br/>at 1200 px, then 1600 px<br/>(cross-check the score)"]
+    E4 -- "Yes" --> R
+    J2 --> R
+
+    R["Resolve the chart from the song master<br/>(difficulty, level, notes, title, artist)"] --> C{"Certain?"}
+    C -- "Yes" --> OK["Show the result<br/>without confirmation"]
+    C -- "Song unclear" --> CAND["Show candidates"]
+    C -- "EX unclear" --> CHIP["Show EX candidate chips"]
+    CAND --> MAN["Manual input as a last resort"]
+    CHIP --> MAN
+    F --> R
+    R -. "OCR trace (lines, boxes, steps, resolvedAt)" .-> TR[("Training sample")]
+```
+
+How EX is decided: the score and the judge table are read independently and a consensus engine accepts a value only when the readings agree and do not contradict the judge counts (PGREAT × 2 + GREAT). After every pass the app records whether the song and EX are already known (`steps` / `resolvedAt` in the OCR trace), so the stage that decided each result can be inspected afterwards.
+
 ## Song master
 
 Loaded from BPIM2 `GET /api/v2/songs/master` at startup and cached. If the request fails (or before it is available), the bundled seed `public/data/songs-master.json` is used.
