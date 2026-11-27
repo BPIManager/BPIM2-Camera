@@ -140,6 +140,13 @@ export function approximatePairs(
       // スコア欄が別の値を確かに読んでいれば、判定表の誤読とみなす
       if (near.some((s) => s !== ex && (scoreConfidence.get(s) ?? 0) >= TRUSTED_SCORE_CONFIDENCE)) continue;
       if (readings && readings.filter((rd) => rd.length > 0).length >= 3 && readings.filter((rd) => rd.some((v) => editDistance(v, String(ex)) <= 1)).length < 2) continue;
+      // 1 桁違いのスコア欄の値が、2 回以上の読みで同じに読めていれば、判定表の値ではなく、その値を採る
+      // （判定表は、その値を 1 桁違いで裏付けている。060306: スコア欄 3953 を 2 回・判定表の GR の誤読で 3952）
+      const repeated = readings ? near.filter((s) => s !== ex && String(s).length === String(ex).length && readings.filter((rd) => rd.includes(String(s))).length >= 2) : [];
+      if (repeated.length === 1) {
+        out.add(repeated[0]!);
+        continue;
+      }
       out.add(ex);
     }
   }
