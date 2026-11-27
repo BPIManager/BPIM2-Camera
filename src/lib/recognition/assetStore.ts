@@ -12,11 +12,11 @@ export interface AssetProgress {
  * ファイルを、キャッシュにあればそこから、なければ取得してキャッシュに入れてから返す。取得の進み具合を知らせる。
  * Worker からも、ページからも使える（Cache Storage は同じオリジンで共有）
  */
-export async function loadAsset(url: string, onProgress?: (p: AssetProgress) => void): Promise<ArrayBuffer> {
+export async function loadAsset(url: string, onProgress?: (p: AssetProgress) => void, signal?: AbortSignal): Promise<ArrayBuffer> {
   const cache = await caches.open(ASSET_CACHE);
   const hit = await cache.match(url);
   if (hit) return hit.arrayBuffer();
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`${url} を取得できません（${res.status}）`);
   // 大きさが分からない（圧縮して送られた）ときは 0。圧縮されていると、content-length（圧縮後）より多く読むので、そのときも 0 とする
   const encoded = (res.headers.get("content-encoding") ?? "identity") !== "identity";
