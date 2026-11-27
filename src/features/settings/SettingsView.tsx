@@ -6,6 +6,7 @@ import AccountSection from "./AccountSection";
 import CameraPicker from "@/components/camera-picker";
 import DebugSection from "./DebugSection";
 import LicensesSection from "./LicensesSection";
+import OcrSection from "./OcrSection";
 import ConfirmDialog from "@/components/confirm-dialog";
 import GuideEditor from "./GuideEditor";
 import Label from "@/components/ui/label";
@@ -91,6 +92,7 @@ export default function SettingsView({ settings, update, viewSize, installable, 
         <p className="text-xs text-muted-foreground">変えると、枠の位置がずれることがあります。そのときは枠を調整し直してください</p>
         <CameraPicker value={settings.cameraId} onChange={(cameraId) => update({ cameraId })} />
       </div>
+      <OcrSection settings={settings} update={update} />
       <Row id="auto" label="自動撮影" hint="枠に画面を合わせて静止すると、自動で読み取ります">
         <Switch id="auto" checked={settings.autoCapture} onCheckedChange={(v) => update({ autoCapture: v })} />
       </Row>

@@ -51,8 +51,9 @@ export function useCaptureReader({ getRecognizer, songs, settings }: { getRecogn
       saveCaptures(stamp, { full: image, ...(regions ?? {}) });
       logDebug(`撮影（保存: internal/captures/${stamp}_*）: ${source} / 枠で切り出し: ${crops ? "あり" : "なし"} / 分離ページ: ${self.crossOriginIsolated}`);
       // 画像は、読み取りが（中止後に遅れて）終わるまで閉じない
-      const task = getRecognizer()
-        .recognize({ full, regions: crops, onStage: setStage, onSong: setSong, onTrace: (t) => (ocr = t), signal: controller.signal })
+      // 認識器の準備ができていない（処理の切り替え直後など）ときも、読み取りの失敗として扱う
+      const task = Promise.resolve()
+        .then(() => getRecognizer().recognize({ full, regions: crops, onStage: setStage, onSong: setSong, onTrace: (t) => (ocr = t), signal: controller.signal }))
         .finally(() => {
           full.close();
           if (crops) for (const b of Object.values(crops)) b.close();

@@ -5,9 +5,9 @@ import type { OcrImage, OcrLine } from "./engine";
 import { hasWebGpu } from "./webgpu";
 
 /** 推論に使うもの。wasm は CPU、webgpu は GPU（onnxruntime-web の WebGPU 版が要る） */
-export type OcrBackend = "wasm" | "webgpu";
+export type OcrExecutionProvider = "wasm" | "webgpu";
 
-type Request = { id: number; type: "warmup" } | { id: number; type: "config"; threads?: number; ep?: OcrBackend; models?: Partial<ModelUrls> } | { id: number; type: "read"; image: OcrImage };
+type Request = { id: number; type: "warmup" } | { id: number; type: "config"; threads?: number; ep?: OcrExecutionProvider; models?: Partial<ModelUrls> } | { id: number; type: "read"; image: OcrImage };
 
 /**
  * WebGPU は、推論のセッションを 1 つずつしか作れない。ライブラリは検出と認識のセッションを同時に作るので、
@@ -25,6 +25,9 @@ function serializeSessionCreation() {
     return next;
   };
 }
+
+/** 結果のキャッシュを使わない指定（型に無いので、行ごとの結果を返す呼び方の型に合わせる） */
+const NO_CACHE = { noCache: true } as unknown as { flatten?: false };
 
 /** 画素を、OCR が読めるキャンバスにする（PNG の復号を省く） */
 function toCanvas(image: ImageData): OffscreenCanvas {
@@ -52,7 +55,7 @@ export function startOcrWorker(models: { local: ModelUrls; fallback: ModelUrls }
    * 未指定なら、WebGPU が使えれば WebGPU、なければ WASM。ライブラリの既定は CPU に固定されているので、ここで選ぶ。
    * WebGPU でセッションを作れなければ、ライブラリが CPU に切り替える
    */
-  let backend: OcrBackend | null = null;
+  let backend: OcrExecutionProvider | null = null;
   /** モデルの取得先の差し替え（ベンチマークで、WebGPU 用の ONNX 形式を試すため） */
   let override: Partial<ModelUrls> = {};
   function ensure(): Promise<PaddleOcrService> {
@@ -83,10 +86,13 @@ export function startOcrWorker(models: { local: ModelUrls; fallback: ModelUrls }
     try {
       const service = await ensure();
       if (msg.type === "warmup") {
-        self.postMessage({ id: msg.id, lines: [] });
+        // 実際に使っている処理を返す（WebGPU でセッションを作れなければ、ライブラリが CPU に切り替えている）
+        const used = (service as unknown as { options?: { session?: { executionProviders?: unknown[] } } }).options?.session?.executionProviders?.[0];
+        self.postMessage({ id: msg.id, lines: [], provider: used === "webgpu" ? "webgpu" : "wasm" });
         return;
       }
-      const r = await service.recognize(msg.image instanceof ArrayBuffer ? msg.image : (toCanvas(msg.image) as unknown as ArrayBuffer));
+      // ライブラリの結果のキャッシュは使わない（同じ画像を読み直すベンチマークで、測れなくなるため。読み取りは決定的なので、結果は変わらない）
+      const r = await service.recognize(msg.image instanceof ArrayBuffer ? msg.image : (toCanvas(msg.image) as unknown as ArrayBuffer), NO_CACHE);
       const lines: OcrLine[] = r.lines.flatMap((row) => row.map((it) => ({ text: it.text, confidence: it.confidence * 100, box: it.box })));
       self.postMessage({ id: msg.id, lines });
     } catch (e) {

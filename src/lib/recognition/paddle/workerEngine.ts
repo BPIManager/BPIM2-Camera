@@ -1,7 +1,7 @@
 import type { OcrEngine, OcrImage, OcrLine } from "./engine";
-import type { OcrBackend } from "./ocrWorkerCore";
+import type { OcrExecutionProvider } from "./ocrWorkerCore";
 
-type Reply = { id: number; lines?: OcrLine[]; error?: string };
+type Reply = { id: number; lines?: OcrLine[]; error?: string; provider?: OcrExecutionProvider };
 
 /** 本読み用（small）の Worker */
 export const createSmallWorker = () => new Worker(new URL("./paddle.worker.ts", import.meta.url), { type: "module" });
@@ -13,12 +13,14 @@ export const createTinyWorker = () => new Worker(new URL("./tiny.worker.ts", imp
 export class WorkerOcrEngine implements OcrEngine {
   private worker: Worker | null = null;
   private seq = 0;
+  /** 実際に使っている処理（ウォームアップが済むと分かる） */
+  provider: OcrExecutionProvider | null = null;
   private pending = new Map<number, { resolve: (l: OcrLine[]) => void; reject: (e: Error) => void }>();
 
   constructor(
     private readonly createWorker: () => Worker = createSmallWorker,
     /** WASM のスレッド数（未指定なら onnxruntime の既定。コア数の半分、最大 4）と、推論に使うもの */
-    private readonly config: { threads?: number; ep?: OcrBackend; models?: { detection?: string; recognition?: string } } = {},
+    private readonly config: { threads?: number; ep?: OcrExecutionProvider; models?: { detection?: string; recognition?: string } } = {},
   ) {}
 
   private ensure(): Worker {
@@ -28,6 +30,7 @@ export class WorkerOcrEngine implements OcrEngine {
       const p = this.pending.get(e.data.id);
       if (!p) return;
       this.pending.delete(e.data.id);
+      if (e.data.provider) this.provider = e.data.provider;
       if (e.data.error) p.reject(new Error(e.data.error));
       else p.resolve(e.data.lines ?? []);
     };
