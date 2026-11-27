@@ -149,16 +149,20 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
     setDraft(null);
   };
 
+  // 撮影の時点の、合わせ直した判定表の枠（自動撮影の呼び出しは、描画より前に走ることがあるので ref で持つ）
+  const judgeSnapRef = useRef<Rect | null>(null);
+
   /** 撮影する（シャッターも、自動撮影も、これを使う） */
   const shoot = async () => {
-    const shot = await snapshot({ rects, view });
+    // 判定表の枠を合わせ直せていれば、その位置で切り出す（保存してある枠は変えない）
+    const shot = await snapshot({ rects: judgeSnapRef.current ? { ...rects, judge: judgeSnapRef.current } : rects, view });
     if (!shot) return;
     setFrozen(URL.createObjectURL(shot.image));
     onCapture(shot.image, "camera", shot.regions, shot.frames);
   };
   // 自動撮影: 静止して、枠に画面が合ったら、シャッターを押したのと同じ撮影を始める。
   // 結果の画面が開いている間（active が false）は止め、読み取り中は一時停止する
-  const detected = useAutoCapture({
+  const { detected, judgeSnap } = useAutoCapture({
     enabled: autoCapture && active && state === "ready" && ocrBackend !== null,
     backend: ocrBackend ?? "cpu",
     // 枠をなぞっている間は、下見も撮影も止める
@@ -168,6 +172,15 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
     guides: { rects, view },
     onTrigger: () => void shoot(),
   });
+  judgeSnapRef.current = judgeSnap;
+  /** 合わせ直した判定表の枠を、保存する枠にする */
+  const adoptJudgeSnap = () => {
+    if (!judgeSnap || base.width === 0 || base.height === 0) return;
+    onLayoutChange({
+      ...resolveLayout(layout),
+      judge: { x: (judgeSnap.x - base.x) / base.width, y: (judgeSnap.y - base.y) / base.height, width: judgeSnap.width / base.width, height: judgeSnap.height / base.height },
+    });
+  };
 
   return (
     <div className="relative flex h-full flex-col bg-background">
@@ -236,6 +249,20 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
                   ? "白枠を画面の各部分に重ねると、自動で読み取ります（枠はなぞって動かせます）"
                   : "白枠を画面の各部分に重ねてください"}
         </p>
+        {judgeSnap && !busy && draft === null && (
+          <div
+            className="pointer-events-none absolute rounded-sm border-2 border-dashed border-success"
+            style={{ left: judgeSnap.x, top: judgeSnap.y, width: judgeSnap.width, height: judgeSnap.height }}
+          >
+            <button
+              type="button"
+              onClick={adoptJudgeSnap}
+              className="pointer-events-auto absolute -bottom-8 left-0 rounded-full bg-scrim px-2 py-1 text-xs whitespace-nowrap"
+            >
+              判定の枠をここに合わせる
+            </button>
+          </div>
+        )}
         {busy && <ScanOverlay rects={rects} stage={stage} song={song} />}
         {/* ピンチ中に、いまの倍率を大きく出す（すぐ消える） */}
         {labelVisible && zoomInfo && (

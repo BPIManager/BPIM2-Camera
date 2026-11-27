@@ -4,6 +4,7 @@ import { guideToVideoRect, type Rect, type Size } from "@/lib/vision/framing";
 import { STILL_FRAME_WIDTH } from "@/lib/vision/autoCapture";
 import { toGray, type Gray } from "@/lib/vision/frame";
 import { GUIDE_KEYS, type GuideKey, type GuideRects } from "@/lib/vision/guides";
+import { judgeSearchArea } from "@/lib/vision/judgeSnap";
 
 export interface Snapshot {
   image: Blob;
@@ -13,6 +14,12 @@ export interface Snapshot {
 }
 
 const toBlob = (c: HTMLCanvasElement) => new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/jpeg", 0.92));
+
+/** 下見用の切り出し。判定表は広めの範囲（表示の座標）と、切り出した画像の大きさ */
+export interface PreviewRegions {
+  crops: Record<GuideKey, ArrayBuffer>;
+  judge: { area: Rect; size: Size };
+}
 
 export type CameraState = "idle" | "starting" | "ready" | "denied" | "unsupported";
 
@@ -161,16 +168,21 @@ export function useCamera(enabled: boolean, deviceId: string | null = null) {
     return toGray(ctx.getImageData(0, 0, w, h).data, w, h);
   }, []);
 
-  /** 白枠の 3 か所を、下見の OCR 用に小さく切り出す（PNG のバイト列）。デジタルズームも反映する */
-  const grabRegions = useCallback(async (guides: { rects: GuideRects; view: Size }): Promise<Record<GuideKey, ArrayBuffer> | null> => {
+  /**
+   * 白枠の 3 か所を、下見の OCR 用に小さく切り出す（PNG のバイト列）。デジタルズームも反映する。
+   * 判定表は、枠を合わせ直すために、枠のまわりを広めに切り出す（その範囲と、切り出した画像の大きさも返す）
+   */
+  const grabRegions = useCallback(async (guides: { rects: GuideRects; view: Size }): Promise<PreviewRegions | null> => {
     const v = videoRef.current;
     if (!v || v.videoWidth === 0) return null;
     const src = { width: v.videoWidth, height: v.videoHeight };
     // 下見は粗くてよい。枠ごとの横幅の上限
     const TARGET: Record<GuideKey, number> = { score: 320, title: 640, judge: 480 };
     const out = {} as Record<GuideKey, ArrayBuffer>;
+    const judgeArea = judgeSearchArea(guides.rects.judge, guides.view);
+    let judgeSize: Size = { width: 0, height: 0 };
     for (const k of GUIDE_KEYS) {
-      const r = guideToVideoRect(guides.rects[k], guides.view, src, digitalZoomRef.current);
+      const r = guideToVideoRect(k === "judge" ? judgeArea : guides.rects[k], guides.view, src, digitalZoomRef.current);
       if (r.width < 4 || r.height < 4) return null;
       const scale = Math.min(1, TARGET[k] / r.width);
       const c = document.createElement("canvas");
@@ -180,8 +192,9 @@ export function useCamera(enabled: boolean, deviceId: string | null = null) {
       const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/png"));
       if (!blob) return null;
       out[k] = await blob.arrayBuffer();
+      if (k === "judge") judgeSize = { width: c.width, height: c.height };
     }
-    return out;
+    return { crops: out, judge: { area: judgeArea, size: judgeSize } };
   }, []);
 
   return { videoRef, state, snapshot, zoom, zoomInfo, setZoom, grabGray, grabRegions };
