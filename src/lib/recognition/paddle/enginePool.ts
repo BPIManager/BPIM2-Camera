@@ -5,7 +5,7 @@ type Task = { image: OcrImage; resolve: (l: OcrLine[]) => void; reject: (e: unkn
 /**
  * 複数のエンジン（Worker）を 1 つのエンジンとして使う。読み取りは、空いているエンジンに、頼まれた順に渡す。
  * 1 つのエンジンが同時に読むのは 1 件だけ（Worker の中で順番待ちさせない）。そのため、まだ始まっていない読み取りは取り消せる。
- * スマホでは、1 つの Worker のスレッドを増やすより、Worker を分けて並べて読むほうが速い（実機で約 25%）。
+ * エンジン 1 つでも、先読みを取り消せるようにするために使う。
  */
 export class EnginePool implements OcrEngine {
   private readonly busy: boolean[];

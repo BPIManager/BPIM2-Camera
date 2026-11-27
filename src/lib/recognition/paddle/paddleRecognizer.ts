@@ -44,9 +44,14 @@ export interface PaddleRecognizerOptions {
   /** false なら、画像を PNG に符号化して渡す（既定は画素のまま渡し、符号化・復号を省く） */
   pixels?: boolean;
   /**
-   * スコア欄・判定表の読みを、いくつ先まで頼んでおくか。エンジンが複数の Worker（EnginePool）のときに使い、
-   * 曲名を読んでいる間に、空いた Worker でスコア欄・判定表を読み進める。
-   * 先読みした読みは plan の順に使い、EX が確定した時点で残りは捨てるので、結果は先読みしないときと同じになる。既定は 0（先読みしない）
+   * スコア欄・判定表を読むエンジン（曲名とは別の Worker）。あれば、曲名を読んでいる間に、こちらでスコア欄・判定表を読み進める。
+   * 実機（Android 6 コア）では、2 つの Worker に同じ種類の読みを振り分けるより、曲名と、スコア欄・判定表で分けるほうが速い
+   * （同時に読むと 1 回ずつが遅くなり、待っている読みが遅れるため）
+   */
+  passEngine?: OcrEngine;
+  /**
+   * スコア欄・判定表の読みを、いくつ先まで頼んでおくか。先読みした読みは plan の順に使い、EX が確定した時点で残りは捨てるので、
+   * 結果は先読みしないときと同じになる。既定は 0（先読みしない）
    */
   ahead?: number;
 }
@@ -83,10 +88,10 @@ export class PaddleRecognizer implements Recognizer {
   ) {}
 
   /** 画像を符号化して読む。読んだ画像の大きさを行に付ける（記録で位置を割合にするため） */
-  private async read(bitmap: ImageBitmap, width: number, mask: Variant | null = null, isolate = false): Promise<OcrLine[]> {
+  private async read(bitmap: ImageBitmap, width: number, mask: Variant | null = null, isolate = false, engine: OcrEngine = this.engine): Promise<OcrLine[]> {
     const c = prepare(bitmap, width, mask, isolate);
     const size = { width: c.width, height: c.height };
-    const lines = await this.engine.readLines(await encode(c, this.options.pixels ?? true));
+    const lines = await engine.readLines(await encode(c, this.options.pixels ?? true));
     return lines.map((l) => ({ ...l, size }));
   }
 
@@ -99,7 +104,7 @@ export class PaddleRecognizer implements Recognizer {
       return await this.recognizeRegions(input, input.regions);
     } finally {
       // 要らなくなった先読み（まだ始まっていないもの）を取り消す。次の読み取りを待たせない
-      if (canCancel(this.engine)) this.engine.cancelPending();
+      for (const e of [this.engine, this.options.passEngine]) if (e && canCancel(e)) e.cancelPending();
     }
   }
 
@@ -134,11 +139,12 @@ export class PaddleRecognizer implements Recognizer {
     // スコア欄・判定表の読み（plan の順）。頼んだ読みは覚えておき、先読みした分はそれを使う
     const plan = (this.options.plan ?? DEFAULT_PLAN).filter((n) => PASSES[n]);
     const ahead = this.options.ahead ?? 0;
+    const passEngine = this.options.passEngine ?? this.engine;
     const reads: Promise<OcrLine[]>[] = [];
     const readPass = (i: number): Promise<OcrLine[]> => {
       if (!reads[i]) {
         const pass = PASSES[plan[i]!]!;
-        reads[i] = pass.kind === "judge" ? this.read(r.judge, pass.width) : this.read(r.score, pass.width, pass.mask, pass.isolate);
+        reads[i] = pass.kind === "judge" ? this.read(r.judge, pass.width, null, false, passEngine) : this.read(r.score, pass.width, pass.mask, pass.isolate, passEngine);
         // 使わずに取り消した先読みの失敗は、捨てる
         reads[i].catch(() => undefined);
       }
@@ -149,7 +155,7 @@ export class PaddleRecognizer implements Recognizer {
       for (let i = 0; i < Math.min(n, plan.length); i++) void readPass(i);
     };
     stage("曲名と難易度を読んでいます");
-    // 曲名を先に頼み、そのあとに先読みを頼む（空いた Worker から順に読む）
+    // 曲名を先に頼み、そのあとに先読みを頼む
     const firstTitle = this.read(r.title, TITLE_PASSES[0].width, TITLE_PASSES[0].mask);
     prefetch(ahead);
     const title: OcrLine[] = await firstTitle;

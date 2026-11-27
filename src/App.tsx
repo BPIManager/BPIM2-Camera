@@ -19,6 +19,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
 import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
 import { WorkerOcrEngine } from "@/lib/recognition/paddle/workerEngine";
+import { EnginePool } from "@/lib/recognition/paddle/enginePool";
 import { isAbortError, raceAbort } from "@/lib/async/abort";
 import { logDebug, saveCaptures, setDebugMode } from "@/lib/debug/ocrLog";
 import type { OcrTrace, Recognizer, SongProgress } from "@/lib/recognition/recognizer";
@@ -69,17 +70,23 @@ export default function App() {
   const onViewSize = useCallback((s: { width: number; height: number }) => s.width > 0 && setViewSize(s), []);
   const songsRef = useRef<readonly SongMasterEntry[]>(songs);
   songsRef.current = songs;
-  const engineRef = useRef<WorkerOcrEngine | null>(null);
+  const enginesRef = useRef<WorkerOcrEngine[]>([]);
   const recognizerRef = useRef<Recognizer | null>(null);
   if (!recognizerRef.current) {
-    engineRef.current = new WorkerOcrEngine();
+    // 曲名と、スコア欄・判定表を、別々の Worker で同時に読む（実機で約 25% 速い）。スコア欄・判定表は先読みし、要らなくなった分は取り消す
+    const titleWorker = new WorkerOcrEngine();
+    const passWorker = new WorkerOcrEngine();
+    enginesRef.current = [titleWorker, passWorker];
     // 枠で撮った画像は PaddleOCR、全体画像の取り込みは Tesseract で読む
-    recognizerRef.current = new PaddleRecognizer(engineRef.current, () => songsRef.current, new TesseractRecognizer(() => songsRef.current));
+    recognizerRef.current = new PaddleRecognizer(titleWorker, () => songsRef.current, new TesseractRecognizer(() => songsRef.current), {
+      passEngine: new EnginePool([passWorker]),
+      ahead: Number.POSITIVE_INFINITY,
+    });
   }
 
   // PaddleOCR のモデルを撮影前に読み込んでおく
   useEffect(() => {
-    void engineRef.current?.warmUp().catch(() => undefined);
+    for (const e of enginesRef.current) void e.warmUp().catch(() => undefined);
   }, []);
 
   if (!settings.onboarded) {
