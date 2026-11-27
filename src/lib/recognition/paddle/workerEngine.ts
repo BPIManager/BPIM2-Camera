@@ -1,4 +1,4 @@
-import type { OcrEngine, OcrLine } from "./engine";
+import type { OcrEngine, OcrImage, OcrLine } from "./engine";
 
 type Reply = { id: number; lines?: OcrLine[]; error?: string };
 
@@ -14,7 +14,11 @@ export class WorkerOcrEngine implements OcrEngine {
   private seq = 0;
   private pending = new Map<number, { resolve: (l: OcrLine[]) => void; reject: (e: Error) => void }>();
 
-  constructor(private readonly createWorker: () => Worker = createSmallWorker) {}
+  constructor(
+    private readonly createWorker: () => Worker = createSmallWorker,
+    /** WASM のスレッド数。未指定なら onnxruntime の既定（コア数の半分、最大 4） */
+    private readonly threads?: number,
+  ) {}
 
   private ensure(): Worker {
     if (this.worker) return this.worker;
@@ -32,10 +36,11 @@ export class WorkerOcrEngine implements OcrEngine {
       this.worker = null;
     };
     this.worker = w;
+    if (this.threads) w.postMessage({ id: 0, type: "config", threads: this.threads });
     return w;
   }
 
-  private call(msg: { type: "warmup" } | { type: "read"; image: ArrayBuffer }, transfer: Transferable[] = []): Promise<OcrLine[]> {
+  private call(msg: { type: "warmup" } | { type: "read"; image: OcrImage }, transfer: Transferable[] = []): Promise<OcrLine[]> {
     const id = ++this.seq;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
@@ -48,8 +53,8 @@ export class WorkerOcrEngine implements OcrEngine {
     return this.call({ type: "warmup" });
   }
 
-  readLines(image: ArrayBuffer): Promise<OcrLine[]> {
-    return this.call({ type: "read", image }, [image]);
+  readLines(image: OcrImage): Promise<OcrLine[]> {
+    return this.call({ type: "read", image }, [image instanceof ArrayBuffer ? image : image.data.buffer]);
   }
 
   /** Worker を止めて、メモリを返す（待っていた呼び出しは失敗にする） */

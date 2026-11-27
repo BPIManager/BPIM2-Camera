@@ -8,10 +8,13 @@ export interface OcrLine {
   size?: { width: number; height: number };
 }
 
+/** OCR に渡す画像。PNG などで符号化したバイト列か、画素そのもの（符号化・復号を省ける） */
+export type OcrImage = ArrayBuffer | ImageData;
+
 /**
- * 画像（PNG などで符号化した ArrayBuffer）から文字の行を読む器。
+ * 画像から文字の行を読む器。
  * ブラウザでは Worker 内の PaddleOCR、評価（Node）では onnxruntime-node の PaddleOCR を差し込む。
  */
 export interface OcrEngine {
-  readLines(image: ArrayBuffer): Promise<OcrLine[]>;
+  readLines(image: OcrImage): Promise<OcrLine[]>;
 }

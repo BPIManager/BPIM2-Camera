@@ -4,22 +4,31 @@ import { isolateDigitRow } from "../ocr/isolate";
 import { maskVariant, type Variant } from "../ocr/preprocess";
 import { logOcr, toTrace } from "@/lib/debug/ocrLog";
 import type { OcrStep, OcrTrace, Recognizer, RecognizeInput } from "../recognizer";
-import type { OcrEngine, OcrLine } from "./engine";
+import type { OcrEngine, OcrImage, OcrLine } from "./engine";
 import { resolveResult } from "../resolve";
 import { rawFromPaddle } from "./fromPaddle";
 import { deskewBitmap } from "./deskewBitmap";
 
+/** スコア欄・判定表を読む 1 段階 */
+type Pass = { kind: "score"; width: number; mask: Variant | null; isolate?: boolean } | { kind: "judge"; width: number };
+
 /**
- * スコア欄は、水色の数字だけを色で抜き出してから読む（左隣の前回スコアや背景を除くため）。
- * EX が確定しなければ、緩い条件・元の画像の順に読み直す（確定すれば省いて速くする）
+ * スコア欄・判定表を読む段階。EX が確定した時点で残りを省く。
+ * - スコア欄は、水色の数字だけを色で抜き出してから読む（左隣の前回スコアや背景を除くため）。決まらなければ、緩い条件・元の画像で読み直す
+ * - 判定表は小さい数字なので、決まらなければ拡大率を上げて読み直す
  */
-const SCORE_PASSES: readonly { width: number; mask: Variant | null; isolate?: boolean }[] = [
-  { width: 700, mask: "cyanFill" },
+export const PASSES: Record<string, Pass> = {
+  judge700: { kind: "judge", width: 700 },
+  cyan: { kind: "score", width: 700, mask: "cyanFill" },
   // 数字の列だけを残す（NEW RECORD のバッジなど、数字に接した水色の塊を除く）
-  { width: 700, mask: "cyanFill", isolate: true },
-  { width: 700, mask: "cyanFillLoose" },
-  { width: 400, mask: null },
-];
+  isolate: { kind: "score", width: 700, mask: "cyanFill", isolate: true },
+  loose: { kind: "score", width: 700, mask: "cyanFillLoose" },
+  raw400: { kind: "score", width: 400, mask: null },
+  judge1200: { kind: "judge", width: 1200 },
+  judge1600: { kind: "judge", width: 1600 },
+};
+export const DEFAULT_PLAN = ["judge700", "cyan", "isolate", "loose", "raw400", "judge1200", "judge1600"] as const;
+const SCORE_PASS_COUNT = Object.values(PASSES).filter((p) => p.kind === "score").length;
 /**
  * 曲名の枠は、まずグレースケールで濃淡を伸ばして読む（色つきの文字や背景に強い）。
  * 難易度や曲名が取れなければ、元の画像でも読み直す
@@ -28,19 +37,37 @@ const TITLE_PASSES: readonly { width: number; mask: Variant | null }[] = [
   { width: 1200, mask: "gray" },
   { width: 900, mask: null },
 ];
-/** 判定表は小さい数字なので、確定しなければ拡大率を上げて読み直す */
-const JUDGE_WIDTHS = [700, 1200, 1600] as const;
 
-async function encode(bitmap: ImageBitmap, width: number, mask: Variant | null = null, isolate = false): Promise<ArrayBuffer> {
+export interface PaddleRecognizerOptions {
+  /** スコア欄・判定表を読む順（PASSES の名前）。既定は DEFAULT_PLAN */
+  plan?: readonly string[];
+  /** false なら、画像を PNG に符号化して渡す（既定は画素のまま渡し、符号化・復号を省く） */
+  pixels?: boolean;
+  /**
+   * スコア欄・判定表を読む別のエンジン（別の Worker）。あれば、曲名を読んでいる間に、plan の先頭から先読みしておく。
+   * 結果は、先読みした読みを plan の順に使うので、先読みしないときと同じになる（使わなかった読みは捨てる）
+   */
+  aheadEngine?: OcrEngine;
+  /** 先読みする段階の数 */
+  ahead?: number;
+}
+
+/** 画像を縮小・前処理する */
+function prepare(bitmap: ImageBitmap, width: number, mask: Variant | null = null, isolate = false): OffscreenCanvas {
   const h = Math.max(1, Math.round((bitmap.height * width) / bitmap.width));
   const c = new OffscreenCanvas(width, h);
-  const ctx = c.getContext("2d", { willReadFrequently: mask !== null })!;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
   ctx.drawImage(bitmap, 0, 0, width, h);
   if (mask) {
     const src = ctx.getImageData(0, 0, width, h);
     const masked = maskVariant(src.data, mask);
     ctx.putImageData(new ImageData(isolate ? isolateDigitRow(masked, width, h) : masked, width, h), 0, 0);
   }
+  return c;
+}
+
+async function encode(c: OffscreenCanvas, pixels: boolean): Promise<OcrImage> {
+  if (pixels) return c.getContext("2d")!.getImageData(0, 0, c.width, c.height);
   return (await c.convertToBlob({ type: "image/png" })).arrayBuffer();
 }
 
@@ -50,13 +77,15 @@ export class PaddleRecognizer implements Recognizer {
     private readonly engine: OcrEngine,
     private readonly getMaster: () => readonly SongMasterEntry[],
     private readonly fallback?: Recognizer,
+    private readonly options: PaddleRecognizerOptions = {},
   ) {}
 
   /** 画像を符号化して読む。読んだ画像の大きさを行に付ける（記録で位置を割合にするため） */
-  private async read(bitmap: ImageBitmap, width: number, mask: Variant | null = null, isolate = false): Promise<OcrLine[]> {
-    const height = Math.max(1, Math.round((bitmap.height * width) / bitmap.width));
-    const lines = await this.engine.readLines(await encode(bitmap, width, mask, isolate));
-    return lines.map((l) => ({ ...l, size: { width, height } }));
+  private async read(bitmap: ImageBitmap, width: number, mask: Variant | null = null, isolate = false, engine: OcrEngine = this.engine): Promise<OcrLine[]> {
+    const c = prepare(bitmap, width, mask, isolate);
+    const size = { width: c.width, height: c.height };
+    const lines = await engine.readLines(await encode(c, this.options.pixels ?? true));
+    return lines.map((l) => ({ ...l, size }));
   }
 
   async recognize(input: RecognizeInput): Promise<RawResult | null> {
@@ -92,6 +121,20 @@ export class PaddleRecognizer implements Recognizer {
       resolvedAt.song ??= song ? step : null;
       resolvedAt.ex ??= ex !== null ? step : null;
     };
+    // スコア欄・判定表の読み（plan の順）。別のエンジンがあれば、曲名を読んでいる間に先読みする
+    const plan = (this.options.plan ?? DEFAULT_PLAN).filter((n) => PASSES[n]);
+    const passEngine = this.options.aheadEngine ?? this.engine;
+    const reads: Promise<OcrLine[]>[] = [];
+    const readPass = (i: number): Promise<OcrLine[]> => {
+      const pass = PASSES[plan[i]!]!;
+      return (reads[i] ??= pass.kind === "judge" ? this.read(r.judge, pass.width, null, false, passEngine) : this.read(r.score, pass.width, pass.mask, pass.isolate, passEngine));
+    };
+    let done = false;
+    if (this.options.aheadEngine) {
+      void (async () => {
+        for (let i = 0; i < Math.min(plan.length, this.options.ahead ?? 3) && !done && !input.signal?.aborted; i++) await readPass(i).catch(() => undefined);
+      })();
+    }
     stage("曲名と難易度を読んでいます");
     const title: OcrLine[] = await this.read(r.title, TITLE_PASSES[0].width, TITLE_PASSES[0].mask);
     // 難易度も曲名も取れなければ、元の画像でも曲名の枠を読み直す
@@ -129,29 +172,27 @@ export class PaddleRecognizer implements Recognizer {
     }
     // 曲名の読み取りを尽くしても確定できない。ここで知らせる（判定やスコアの手がかりで、あとから確定することもある）
     if (!resolved) input.onSong?.({ kind: "unresolved" });
-    stage("判定の内訳を読んでいます");
-    const judge: OcrLine[][] = [await this.read(r.judge, JUDGE_WIDTHS[0])];
-    mark(`judge:${JUDGE_WIDTHS[0]}`, judge[0]!.length, rawFromPaddle({ title, score: [], judge }, this.getMaster()));
+    const judge: OcrLine[][] = [];
     const score: OcrLine[][] = [];
     const scoreGroups: ("color" | "raw")[] = [];
     let raw: RawResult | null = null;
-    for (const [i, pass] of SCORE_PASSES.entries()) {
-      stage(i === 0 ? "EXスコアを読んでいます" : `EXスコアを読み直しています（${i + 1}/${SCORE_PASSES.length}）`);
-      score.push(await this.read(r.score, pass.width, pass.mask, pass.isolate));
-      scoreGroups.push(pass.mask ? "color" : "raw");
+    for (const [i, name] of plan.entries()) {
+      if (raw?.exScore.value != null) break;
+      const pass = PASSES[name]!;
+      if (pass.kind === "judge") {
+        stage(judge.length === 0 ? "判定の内訳を読んでいます" : "判定の数字からスコアを確かめています");
+        judge.push(await readPass(i));
+      } else {
+        stage(score.length === 0 ? "EXスコアを読んでいます" : `EXスコアを読み直しています（${score.length + 1}/${SCORE_PASS_COUNT}）`);
+        score.push(await readPass(i));
+        scoreGroups.push(pass.mask ? "color" : "raw");
+      }
       raw = rawFromPaddle({ title, score, scoreGroups, judge }, this.getMaster());
       announceIfResolved(raw);
-      mark(`score:${pass.mask ?? "raw"}${pass.isolate ? "-isolate" : ""}${pass.width}`, score[score.length - 1]!.length, raw);
-      if (raw?.exScore.value != null) break;
+      const label = pass.kind === "judge" ? `judge:${pass.width}` : `score:${pass.mask ?? "raw"}${pass.isolate ? "-isolate" : ""}${pass.width}`;
+      mark(label, (pass.kind === "judge" ? judge : score).at(-1)!.length, raw);
     }
-    for (const w of JUDGE_WIDTHS.slice(1)) {
-      if (raw?.exScore.value != null) break;
-      stage("判定の数字からスコアを確かめています");
-      judge.push(await this.read(r.judge, w));
-      raw = rawFromPaddle({ title, score, scoreGroups, judge }, this.getMaster());
-      announceIfResolved(raw);
-      mark(`judge:${w}`, judge[judge.length - 1]!.length, raw);
-    }
+    done = true;
     const entry = {
       title,
       score,
