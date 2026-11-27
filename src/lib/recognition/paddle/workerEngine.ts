@@ -1,4 +1,5 @@
 import type { OcrEngine, OcrImage, OcrLine } from "./engine";
+import type { OcrBackend } from "./ocrWorkerCore";
 
 type Reply = { id: number; lines?: OcrLine[]; error?: string };
 
@@ -16,8 +17,8 @@ export class WorkerOcrEngine implements OcrEngine {
 
   constructor(
     private readonly createWorker: () => Worker = createSmallWorker,
-    /** WASM のスレッド数。未指定なら onnxruntime の既定（コア数の半分、最大 4） */
-    private readonly threads?: number,
+    /** WASM のスレッド数（未指定なら onnxruntime の既定。コア数の半分、最大 4）と、推論に使うもの */
+    private readonly config: { threads?: number; ep?: OcrBackend; models?: { detection?: string; recognition?: string } } = {},
   ) {}
 
   private ensure(): Worker {
@@ -36,7 +37,7 @@ export class WorkerOcrEngine implements OcrEngine {
       this.worker = null;
     };
     this.worker = w;
-    if (this.threads) w.postMessage({ id: 0, type: "config", threads: this.threads });
+    if (Object.keys(this.config).length > 0) w.postMessage({ id: 0, type: "config", ...this.config });
     return w;
   }
 
