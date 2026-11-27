@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { isBenchmarkRunning, subscribeBenchmark } from "@/lib/recognition/benchmark";
 import { createOcrSetup, type OcrBackend, type OcrSetup } from "@/lib/recognition/ocrSetup";
 import { hasWebGpu } from "@/lib/recognition/paddle/webgpu";
+import type { OcrEngine } from "@/lib/recognition/paddle/engine";
 import type { Recognizer } from "@/lib/recognition/recognizer";
 import type { SongMasterEntry } from "@/lib/songs/types";
 
@@ -11,7 +12,7 @@ import type { SongMasterEntry } from "@/lib/songs/types";
  * ベンチマークの間は Worker を止める（スマホで、モデルを何組もメモリに載せないため）。enabled が false の間も作らない。
  * getRecognizer は、その時点の認識器を返す。
  */
-export function useOcrEngine(songs: readonly SongMasterEntry[], preferred: OcrBackend | null, enabled = true): { getRecognizer: () => Recognizer; backend: OcrBackend | null } {
+export function useOcrEngine(songs: readonly SongMasterEntry[], preferred: OcrBackend | null, enabled = true): { getRecognizer: () => Recognizer; getEngine: () => OcrEngine | null; backend: OcrBackend | null } {
   const songsRef = useRef(songs);
   songsRef.current = songs;
   const setupRef = useRef<OcrSetup | null>(null);
@@ -45,6 +46,8 @@ export function useOcrEngine(songs: readonly SongMasterEntry[], preferred: OcrBa
       if (!setupRef.current) throw new Error("OCR の準備ができていません。少し待ってから、もう一度お試しください");
       return setupRef.current.recognizer;
     },
+    /** 画像全体を読む OCR（取り込みの枠の推定に使う）。準備ができていなければ null */
+    getEngine: () => setupRef.current?.engine ?? null,
     /** 使っている処理（WebGPU の有無を調べ終わるまで null） */
     backend,
   };

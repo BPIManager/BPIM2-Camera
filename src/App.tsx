@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Toaster } from "sonner";
 import CameraView from "@/features/camera/CameraView";
+import ImportFrameEditor from "@/features/camera/ImportFrameEditor";
 import HistoryView from "@/features/history/HistoryView";
 import InstallDialog from "@/features/install/InstallDialog";
 import Onboarding from "@/features/onboarding/Onboarding";
@@ -17,6 +18,7 @@ import { useOcrEngine } from "@/hooks/useOcrEngine";
 import { useSampleUpload } from "@/hooks/useSampleUpload";
 import { useSettings } from "@/hooks/useSettings";
 import type { Size } from "@/lib/vision/framing";
+import { resolveLayout } from "@/lib/vision/guides";
 
 /** 撮影以外のタブは、タブ名のヘッダーを付ける（撮影はカメラ映像を全面に使う） */
 const HEADED_TABS: readonly Tab[] = ["history", "settings"];
@@ -28,10 +30,12 @@ export default function App() {
   useDebugMode(settings.debugMode);
   const { songs } = useMaster();
   // セットアップ中も、OCR のモデルを読み込んでおく（処理を決めるベンチマークの前は、まだ作らない）
-  const { getRecognizer, backend } = useOcrEngine(songs, settings.ocrBackend, settings.onboarded || settings.ocrBackend !== null);
+  const { getRecognizer, getEngine, backend } = useOcrEngine(songs, settings.ocrBackend, settings.onboarded || settings.ocrBackend !== null);
   const reader = useCaptureReader({ getRecognizer, songs, settings });
   const install = useInstallPrompt(settings.onboarded);
   const [tab, setTab] = useState<Tab>("camera");
+  // 取り込んだ画像。枠を合わせている間だけ入っている（合わせたら、撮影と同じく枠の中を読む）
+  const [importing, setImporting] = useState<Blob | null>(null);
   // カメラ表示領域の大きさ。設定の枠調整が同じ縦横比で表示するために保持する
   const [viewSize, setViewSize] = useState<Size>({ width: window.innerWidth, height: Math.max(200, window.innerHeight - 170) });
   const onViewSize = useCallback((s: Size) => s.width > 0 && setViewSize(s), []);
@@ -63,6 +67,7 @@ export default function App() {
             layoutAspect={settings.layoutAspect}
             onViewSize={onViewSize}
             onCapture={reader.read}
+            onImport={setImporting}
             onCancel={reader.cancel}
             autoCapture={settings.autoCapture}
             cameraId={settings.cameraId}
@@ -77,6 +82,19 @@ export default function App() {
       <UnsavedImageDialog image={reader.unsaved} onClose={reader.clearUnsaved} />
       <Toaster position="top-center" theme="dark" offset="calc(env(safe-area-inset-top) + 0.75rem)" toastOptions={{ classNames: { toast: "!border-border !bg-card !text-foreground", description: "!text-muted-foreground" } }} />
       <DownloadProgress />
+      {importing && (
+        <ImportFrameEditor
+          image={importing}
+          fallback={resolveLayout(settings.layout)}
+          getEngine={getEngine}
+          songs={songs}
+          onCancel={() => setImporting(null)}
+          onConfirm={(regions) => {
+            setImporting(null);
+            void reader.read(importing, "import", regions);
+          }}
+        />
+      )}
       {install.open && <InstallDialog mode={install.mode} onClose={install.close} />}
       {reader.draft && <ResultDrawer key={reader.draft.id} draft={reader.draft} songs={songs} settings={settings} onClose={reader.closeDraft} />}
     </div>

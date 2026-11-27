@@ -52,7 +52,7 @@ Set in `.env.local` (see `.env.example`). They are read at build time, so the pr
 
 ## How a result is read
 
-The camera path crops three regions with the guide frames and reads them with PaddleOCR (PP-OCRv6 via `ppu-paddle-ocr` / onnxruntime-web). It runs on the GPU (WebGPU) when the device has it, otherwise on the CPU (multi-threaded WASM), where the title and the score/judge regions are read in two workers at the same time. Importing an image (no frames) falls back to a whole-image recognizer.
+The camera path crops three regions with the guide frames and reads them with PaddleOCR (PP-OCRv6 via `ppu-paddle-ocr` / onnxruntime-web). It runs on the GPU (WebGPU) when the device has it, otherwise on the CPU (multi-threaded WASM), where the title and the score/judge regions are read in two workers at the same time. Importing an image goes through the same path: the app first reads the whole image once, finds fixed labels (judge labels, "SCORE", difficulty, "NOTES", the song title, …), fits them to a reference photo with a similarity transform, and places the three frames; the user corrects them and confirms, and the crops are read like a camera capture.
 
 1. **Score**: the cyan digits are extracted by color, then read by several preprocessing passes; the EX score is decided when independent readings agree (consensus engine). The judge table (PGREAT / GREAT / ...) is used as a cross-check, which also catches one-digit errors.
 2. **Song-title band**: reads difficulty, level, and note count to narrow the song master, then matches the title, artist, and genre by edit distance. Reading passes: grayscale 1200 px, then the raw image at 900 px.
@@ -61,15 +61,14 @@ The camera path crops three regions with the guide frames and reads them with Pa
 
 The OCR trace (which pass produced what) is kept with each training sample and shown in debug mode.
 
-Models: `public/models/paddle` (small ≈ 31 MB as `.onnx` so WebGPU can load it, tiny ≈ 6 MB as `.ort`; fetched by `pnpm models:fetch`, served from the app so it works offline). `public/models/digits.json` is a small nearest-neighbor digit classifier kept as an extra vote. The app downloads and caches the models and the onnxruntime-web runtime itself (Cache Storage `bpim2-ocr-assets-v1`, with a download progress toast); the CPU workers use the WASM-only runtime (≈ 15 MB) and the GPU worker the WebGPU runtime (≈ 29 MB), so only the one in use is fetched. Unused files can be deleted in Settings.
+Models: `public/models/paddle` (small ≈ 31 MB as `.onnx` so WebGPU can load it, tiny ≈ 6 MB as `.ort`; fetched by `pnpm models:fetch`, served from the app so it works offline). `public/models/digits.json` (a small nearest-neighbor digit classifier) is only used by the evaluation scripts. The app downloads and caches the models and the onnxruntime-web runtime itself (Cache Storage `bpim2-ocr-assets-v1`, with a download progress toast); the CPU workers use the WASM-only runtime (≈ 15 MB) and the GPU worker the WebGPU runtime (≈ 29 MB), so only the one in use is fetched. Unused files can be deleted in Settings.
 
 ### Flow
 
 ```mermaid
 flowchart TD
-    A["Capture or import"] --> B{"Crops from the<br/>guide frames?"}
-    B -- "No (imported image)" --> F["Fallback recognizer<br/>(Tesseract, whole image)"]
-    B -- "Yes (camera)" --> T1
+    A["Capture"] --> T1
+    I["Import"] --> IF["Read the whole image once,<br/>place the frames automatically,<br/>user corrects them"] --> T1
 
     subgraph TITLE ["1. Song-title band"]
         T1["gray, 1200 px"] --> Q1{"Song resolved?"}
@@ -111,7 +110,6 @@ flowchart TD
     C -- "EX unclear" --> CHIP["Show EX candidate chips"]
     CAND --> MAN["Manual input as a last resort"]
     CHIP --> MAN
-    F --> R
     R -. "OCR trace (lines, boxes, steps, resolvedAt)" .-> TR[("Training sample")]
 ```
 
@@ -123,7 +121,7 @@ Loaded from BPIM2 `GET /api/v2/songs/master` at startup and cached. If the reque
 
 ## Training data
 
-Opt-in. When the user agrees to statistics, every camera read is stored on the device as soon as OCR finishes, whether it succeeded or failed (no confirmation needed): the cropped images (score, title, and judge regions only; never the full photo) and the OCR trace. If "include images" is off, only `labels.json` is uploaded (the crops stay on the device); turning it on later uploads the images for samples that were sent without them. If the user later confirms the result, the confirmed values are added as the ground-truth label (`confirmed: true`) and the sample is uploaded again, overwriting the earlier one. Samples that were never confirmed have `confirmed: false` and null label fields. Cancelled reads and imported images (no crops) are not collected. "Export" in Settings makes a zip (`labels.json` and images).
+Opt-in. When the user agrees to statistics, every read is stored on the device as soon as OCR finishes, whether it succeeded or failed (no confirmation needed): the cropped images (score, title, and judge regions only; never the full photo) and the OCR trace. If "include images" is off, only `labels.json` is uploaded (the crops stay on the device); turning it on later uploads the images for samples that were sent without them. If the user later confirms the result, the confirmed values are added as the ground-truth label (`confirmed: true`) and the sample is uploaded again, overwriting the earlier one. Samples that were never confirmed have `confirmed: false` and null label fields. Cancelled reads are not collected; imported images are collected like camera reads (crops only). "Export" in Settings makes a zip (`labels.json` and images).
 
 Upload (`src/lib/training/upload.ts`): when consent is given and `VITE_STATS_UPLOAD_ENDPOINT` is set, unsent samples are uploaded oldest first when a read finishes, on confirmation, on app start / setting change, and when the device comes back online. Failures stay in the queue and are retried. Samples are written to R2 as:
 
@@ -211,7 +209,7 @@ tailscale serve --https=8443 off   # stop publishing
 
 ## Stack
 
-Vite, React 19, TypeScript, Tailwind CSS v4, shadcn-style UI (Radix, vaul, sonner), idb (IndexedDB), PaddleOCR on onnxruntime-web, tesseract.js (legacy recognizer), Firebase Auth, Google Tag Manager. Path alias: `@/` → `src/`.
+Vite, React 19, TypeScript, Tailwind CSS v4, shadcn-style UI (Radix, vaul, sonner), idb (IndexedDB), PaddleOCR on onnxruntime-web, Firebase Auth, Google Tag Manager. Path alias: `@/` → `src/`.
 
 ## Status
 
