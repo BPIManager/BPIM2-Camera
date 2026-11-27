@@ -7,7 +7,7 @@ import type { OcrStep, OcrTrace, Recognizer, RecognizeInput } from "../recognize
 import type { OcrEngine, OcrImage, OcrLine } from "./engine";
 import { resolveResult } from "../resolve";
 import { rawFromPaddle } from "./fromPaddle";
-import { deskewBitmap, estimateBitmapTilt, rotateBitmap } from "./deskewBitmap";
+import { deskewBitmap, estimateBitmapTilt, MIN_TILT, rotateBitmap } from "./deskewBitmap";
 
 /** スコア欄・判定表を読む 1 段階 */
 type Pass = { kind: "score"; width: number; mask: Variant | null; isolate?: boolean; deskew?: boolean } | { kind: "judge"; width: number; deskew?: boolean };
@@ -30,7 +30,7 @@ export const PASSES: Record<string, Pass> = {
   scoreDeskew: { kind: "score", width: 700, mask: "cyanFill", deskew: true },
   judgeDeskew: { kind: "judge", width: 1200, deskew: true },
 };
-export const DEFAULT_PLAN = ["judge700", "cyan", "isolate", "loose", "raw400", "judge1200", "judge1600"] as const;
+export const DEFAULT_PLAN = ["judge700", "cyan", "isolate", "loose", "raw400", "judge1200", "judge1600", "scoreDeskew", "judgeDeskew"] as const;
 const SCORE_PASS_COUNT = Object.values(PASSES).filter((p) => p.kind === "score" && !p.deskew).length;
 /**
  * 曲名の枠は、まずグレースケールで濃淡を伸ばして読む（色つきの文字や背景に強い）。
@@ -59,9 +59,10 @@ export interface PaddleRecognizerOptions {
   ahead?: number;
   /**
    * スコア欄・判定表を傾き補正するときの、傾きの求め方。title は曲名の枠から求めた傾きを使う（3 か所は同じ写真なので、傾きは共通。
-   * 曲名の枠は文字の行が多く、数字 1 行のスコア欄より傾きを推定しやすい）。self は、それぞれの枠から求める。既定は title
+   * 曲名の枠は文字の行が多く、数字 1 行のスコア欄より傾きを推定しやすい）。self は、それぞれの枠から求める。
+   * auto（既定）は、曲名の枠の傾きが小さければ（補正しない大きさなら）、それぞれの枠から求める
    */
-  tiltSource?: "title" | "self";
+  tiltSource?: "title" | "self" | "auto";
 }
 
 /** 先読みの取り消しに対応したエンジン（EnginePool） */
@@ -147,7 +148,12 @@ export class PaddleRecognizer implements Recognizer {
     const passEngine = this.options.passEngine ?? this.engine;
     // 傾きを直したスコア欄・判定表（要るときに 1 回だけ作る）。傾きが小さければ null
     let titleTilt: number | null = null;
-    const tiltOf = (bitmap: ImageBitmap) => (this.options.tiltSource === "self" ? estimateBitmapTilt(bitmap) : (titleTilt ??= estimateBitmapTilt(r.title)));
+    const tiltOf = (bitmap: ImageBitmap) => {
+      const source = this.options.tiltSource ?? "auto";
+      if (source === "self") return estimateBitmapTilt(bitmap);
+      titleTilt ??= estimateBitmapTilt(r.title);
+      return source === "auto" && Math.abs(titleTilt) < MIN_TILT ? estimateBitmapTilt(bitmap) : titleTilt;
+    };
     const rotated = new Map<ImageBitmap, Promise<ImageBitmap | null>>();
     const leveled = (bitmap: ImageBitmap) => {
       if (!rotated.has(bitmap)) rotated.set(bitmap, rotateBitmap(bitmap, tiltOf(bitmap)).then((x) => x?.bitmap ?? null));
