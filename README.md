@@ -1,56 +1,140 @@
 # BPIM2 Camera
 
-IIDX のリザルト画面を撮影（または画像取り込み）して、曲・EX スコアを読み取り BPI を表示する PWA。要件は [docs/requirements.md](docs/requirements.md)。
+A PWA that reads the result screen of beatmania IIDX from a phone camera (or an imported image), identifies the song and chart, reads the EX score, and shows the BPI. Scores can be registered to [BPIM2](https://bpi2.poyashi.me), and the result can be shared to X as an image.
 
-## コマンド
+- App: https://bpi-cam.poyashi.me
+- Requirements: [docs/requirements.md](docs/requirements.md) (Japanese)
+- License: [AGPL-3.0](LICENSE)
 
-- `pnpm dev` 開発サーバー / `pnpm build` ビルド / `pnpm test` テスト / `pnpm typecheck` 型チェック
-- `node scripts/make-icons.mjs` PWA アイコンの再生成
+All recognition runs on the device (WebAssembly in Web Workers). The network is used only for the song master, the BPI calculation / ranking API, sign-in, BPIM2 sync, and the optional training-data upload.
 
-## スマホ実機で確認する（Tailscale）
+## Features
 
-カメラは HTTPS が必須なので `tailscale serve` で HTTPS 化する。443 が別アプリで使用中の場合は 8443 を使う。
+- **Camera capture** with white guide frames (score, song-title band, judge table). Frames can be adjusted in setup, in Settings, or directly on the camera view (drag to move, drag a corner to resize).
+- **Auto capture** (experimental): shoots when the screen is steady. Uses the tiny OCR model for a quick preview; the shutter button always uses the small model.
+- **Camera selection** with a live preview in setup and Settings.
+- **Result drawer**: song / chart, EX score, BPI, estimated rank, BPI chart, history for the chart. Every value can be corrected by hand.
+- **History** stored on the device (image and result).
+- **BPIM2 sync** (sign-in required: Google / X / LINE / email) to the latest version or INFINITAS.
+- **Share to X** as the photo or a card, with a customizable text template. Optional save to the camera roll.
+- **Cancel handling**: if OCR is cancelled while auto-save is on, a dialog asks whether to save only the image.
+- **Debug mode** (Settings): shows the OCR result JSON at the bottom of Settings.
+- **Open-source licenses** are listed (collapsed) in Settings.
 
-```
-pnpm dev
-tailscale serve --bg --https=8443 5183
-# → https://<端末名>.<tailnet>.ts.net:8443 をスマホ（同じ tailnet）で開く
-tailscale serve --https=8443 off   # 公開を止める
-```
+BPI is calculated only for ☆11 and ☆12. Lower levels are still read, stored, and shared; the BPI is shown as "not applicable".
 
-## サインイン（Firebase）の設定
-
-authDomain はアプリ自身のホストで、`/__/auth/*` を `bpimv2.firebaseapp.com` へ中継する。別ドメインのままだと、ブラウザの保存領域の分離でリダイレクトの結果を受け取れない。開発・プレビューは Vite のプロキシが中継する（Tailscale 経由もそのまま動く）。
-
-使うドメイン（検証: `*.ts.net`、本番: アプリの URL）ごとに、次を設定する。
-
-1. Firebase コンソール > Authentication > 設定 > 承認済みドメインに追加
-2. 各プロバイダ側のリダイレクト（コールバック）URI に `https://<ドメイン>/__/auth/handler` を追加
-   - Google: Google Cloud コンソール > 認証情報 > Firebase 用の OAuth クライアント > 承認済みのリダイレクト URI
-   - X: 開発者ポータルの Callback URI
-   - LINE: LINE Login チャネルの Callback URL
-3. メールでのサインイン（Turnstile つき）。BPIM2 の確認メール API を使い、Turnstile は BPIM2 のサーバーが検証する
-   - `VITE_TURNSTILE_SITE_KEY` に、BPIM2 の `NEXT_PUBLIC_TURNSTILE_SITE_KEY` と同じ値を設定する
-   - Cloudflare の Turnstile ウィジェットの許可ホスト名に、このアプリのドメインを足す
-   - BPIM2 側の環境変数 `EMAIL_LINK_ALLOWED_ORIGINS` に、このアプリのオリジン（例: `https://camera.example.com`）を足す。メールのリンクの戻り先は、ここに書いたオリジンの `/signin.html` だけが許される
-4. 本番の VPS（nginx の例）。`/__/auth/` には COOP/COEP を付けず、`/signin.html` も同様に付けない
+## Commands
 
 ```
+pnpm install
+pnpm models:fetch   # download the PaddleOCR models into public/models/paddle (not in git)
+pnpm dev            # dev server
+pnpm build          # type-check and build
+pnpm preview        # serve the build
+pnpm test           # unit tests (vitest)
+pnpm typecheck
+pnpm eval           # evaluation on real images (separate vitest config; see below)
+pnpm train:digits   # rebuild public/models/digits.json from training/manifest.json
+pnpm licenses:gen   # regenerate src/generated/licenses.json
+node scripts/make-icons.mjs   # regenerate the PWA icons
+```
+
+`pnpm eval <filter>` runs the scripts in `test/eval`. They read private sample images (`SAMPLE_DIR`, default `D:/camera-example`) and write results to `internal/*.txt`, because console output is suppressed.
+
+## Environment variables
+
+Set in `.env.local` (see `.env.example`). They are read at build time, so the production build needs the same variables.
+
+| Name | Purpose |
+| --- | --- |
+| `VITE_STATS_UPLOAD_ENDPOINT` | URL of the upload Worker's `/v1/upload-urls`. If empty, nothing is uploaded. Production: `https://bpim2-camera-upload.poyas.workers.dev/v1/upload-urls` |
+| `VITE_TURNSTILE_SITE_KEY` | Turnstile site key for email sign-in (same value as BPIM2's `NEXT_PUBLIC_TURNSTILE_SITE_KEY`) |
+
+## How a result is read
+
+The camera path crops three regions with the guide frames and reads them with PaddleOCR (PP-OCRv6 via `ppu-paddle-ocr` / onnxruntime-web). Importing an image (no frames) falls back to a whole-image recognizer.
+
+1. **Score**: the cyan digits are extracted by color, then read by several preprocessing passes; the EX score is decided when independent readings agree (consensus engine). The judge table (PGREAT / GREAT / ...) is used as a cross-check, which also catches one-digit errors.
+2. **Song-title band**: reads difficulty, level, and note count to narrow the song master, then matches the title, artist, and genre by edit distance. Reading passes: grayscale 1200 px, then the raw image at 900 px.
+3. **Tilt correction (fallback)**: if the song is still unresolved, the tilt of the title lines is estimated (projection profile, ±15°), the crop is rotated, and it is read again. It is used only as a fallback.
+4. If everything is certain, the result is shown without confirmation. Otherwise candidates are shown, then EX score chips, and manual input only as a last resort.
+
+The OCR trace (which pass produced what) is kept with each training sample and shown in debug mode.
+
+Models: `public/models/paddle` (small ≈ 31 MB, tiny ≈ 6 MB; fetched by `pnpm models:fetch`, served from the app so it works offline). `public/models/digits.json` is a small nearest-neighbor digit classifier kept as an extra vote.
+
+## Song master
+
+Loaded from BPIM2 `GET /api/v2/songs/master` at startup and cached. If the request fails (or before it is available), the bundled seed `public/data/songs-master.json` is used.
+
+## Training data
+
+Opt-in. When the user agrees to statistics and turns on "include images", confirmed results (ground-truth labels) and the cropped images (score, title, and judge regions only; never the full photo) are stored on the device. "Export" in Settings makes a zip (`labels.json` and images).
+
+Upload (`src/lib/training/upload.ts`): when consent is given and `VITE_STATS_UPLOAD_ENDPOINT` is set, unsent samples are uploaded oldest first on result confirmation, app start / setting change, and when the device comes back online. Failures stay in the queue and are retried. Samples are written to R2 as:
+
+```
+samples/<deviceId>/<sampleId>/{score.jpg, title.jpg, judge.jpg, labels.json}
+```
+
+`labels.json` includes the OCR trace.
+
+### Upload Worker (`worker/`)
+
+A Cloudflare Worker that issues presigned R2 PUT URLs (hand-written SigV4 query signing with WebCrypto, `UNSIGNED-PAYLOAD`). The client sends `deviceId`, `id`, and the file names/sizes, then PUTs each file straight to R2. It validates IDs (`^[A-Za-z0-9_-]{8,64}$`), file names, and sizes (images ≤ 512 KB, labels ≤ 16 KB), and answers CORS only for allowed origins. There is no rate limit or authentication on URL issuance.
+
+Deploy:
+
+```
+cd worker
+# variables in wrangler.jsonc: R2_BUCKET, ALLOWED_ORIGINS (comma-separated origins)
+npx wrangler secret put R2_ACCOUNT_ID
+npx wrangler secret put R2_ACCESS_KEY_ID
+npx wrangler secret put R2_SECRET_ACCESS_KEY
+npx wrangler deploy
+```
+
+The R2 bucket also needs a CORS rule that allows `PUT` with the `content-type` header from the same origins as `ALLOWED_ORIGINS`:
+
+```
+npx wrangler r2 bucket cors set <bucket> --file cors.json
+```
+
+Current deployment: Worker `bpim2-camera-upload`, bucket `bpim2cam`, allowed origins `https://bpi-cam.poyashi.me` and `http://localhost:5173`.
+
+## Sign-in (Firebase)
+
+`authDomain` is the app's own host, and `/__/auth/*` is proxied to `bpimv2.firebaseapp.com`. With a different domain, the browser's storage partitioning prevents the redirect result from being received. The Vite dev/preview server proxies it (it also works over Tailscale).
+
+For each domain you use (test: `*.ts.net`, production: the app URL):
+
+1. Firebase console > Authentication > Settings > Authorized domains: add the domain.
+2. Add `https://<domain>/__/auth/handler` to each provider's redirect (callback) URI:
+   - Google: Google Cloud console > Credentials > the OAuth client for Firebase > Authorized redirect URIs
+   - X: Callback URI in the developer portal
+   - LINE: Callback URL of the LINE Login channel
+3. Email sign-in (with Turnstile) uses BPIM2's confirmation-mail API; the Turnstile token is verified by the BPIM2 server.
+   - Set `VITE_TURNSTILE_SITE_KEY`.
+   - Add the app's domain to the allowed hostnames of the Turnstile widget.
+   - Add the app's origin (for example `https://camera.example.com`) to BPIM2's `EMAIL_LINK_ALLOWED_ORIGINS`. The link in the email may only return to `/signin.html` of a listed origin.
+4. Production VPS (nginx example). Do not send COOP/COEP on `/__/auth/` or `/signin.html`.
+
+```nginx
 location /__/auth/ {
     proxy_pass https://bpimv2.firebaseapp.com;
     proxy_ssl_server_name on;
     proxy_set_header Host bpimv2.firebaseapp.com;
 }
 location /bpim2-api/ {
-    # 認証つき BPIM2 API（ユーザー名・アイコンの取得など）。CORS 非対応なので同一オリジンで中継する
+    # Authenticated BPIM2 API (user name, icon, ...). No CORS, so it is proxied same-origin.
     proxy_pass https://bpi2.poyashi.me/;
     proxy_ssl_server_name on;
     proxy_set_header Host bpi2.poyashi.me;
-    # BPIM2 の送信制限と Turnstile の検証が、利用者の IP で行われるように
+    # so that BPIM2's rate limit and Turnstile verification see the user's IP
     proxy_set_header X-Forwarded-For $remote_addr;
 }
 location = /signin.html {
-    # add_header で Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy を付けない
+    # no Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy
 }
 location / {
     add_header Cross-Origin-Opener-Policy same-origin;
@@ -58,33 +142,26 @@ location / {
 }
 ```
 
-## BPI の扱い
+COOP/COEP are required for the multi-threaded WASM. The Service Worker does not serve the app shell for navigations to `/__/auth/`.
 
-BPI は ☆11・☆12 のみ算出する。☆10 以下も読み取り・履歴・X シェアは行い、BPI は「BPI算出対象外」と表示する。
+## Testing on a phone (Tailscale)
 
-## 読み取りの流れ
+The camera requires HTTPS, so use `tailscale serve`. If 443 is taken by another app, use 8443.
 
-カメラ撮影は、白枠（スコア・曲名帯の 2 枠。設定で位置を調整可）の中だけを切り出して読む。
+```
+pnpm dev
+tailscale serve --bg --https=8443 5183
+# open https://<device>.<tailnet>.ts.net:8443 on the phone (same tailnet)
+tailscale serve --https=8443 off   # stop publishing
+```
 
-1. スコア: 水色の数字を色で抽出し、桁ごとに切り出して最近傍法で分類（学習済み `public/models/digits.json`）。tesseract.js（数字のみ許可）の読み取りも併用し、複数回の一致で確定
-2. 曲名帯: tesseract.js で難易度・レベル・ノーツ数を読み、曲マスタを絞る。絞れなければ日本語モデルで曲名を読み直し（必要なときだけ読み込む）、編集距離で照合
-3. 確定できれば確認なしで結果を表示。曲が絞れなければ候補、EX が未確定なら候補チップ、それでも駄目なときだけ手入力
+## Stack
 
-## 学習データ
+Vite, React 19, TypeScript, Tailwind CSS v4, shadcn-style UI (Radix, vaul, sonner), idb (IndexedDB), PaddleOCR on onnxruntime-web, tesseract.js (legacy recognizer), Firebase Auth, Google Tag Manager. Path alias: `@/` → `src/`.
 
-統計データの送信に同意していると、確認済みの結果（正解ラベル）と切り出した画像（スコア部・曲名帯のみ）を端末に貯める。設定の「書き出す」で zip（labels.json と画像）にできる。
+## Status
 
-送信先は `VITE_STATS_UPLOAD_ENDPOINT`（未設定なら送信しない）。同意があり「画像を含める」がオンのとき、確定時・起動時・オンライン復帰時に、未送信分を `worker/`（署名付き PUT URL を発行する Cloudflare Worker）経由で R2 へ直接送る（`samples/<端末ID>/<サンプルID>/{score,title,judge}.jpg・labels.json`）。Worker のデプロイは `worker/wrangler.jsonc` の変数（`R2_BUCKET`・`ALLOWED_ORIGINS`）を設定し、`R2_ACCOUNT_ID`・`R2_ACCESS_KEY_ID`・`R2_SECRET_ACCESS_KEY` を `wrangler secret put` で入れる。
-
-- `pnpm train:digits`: `training/manifest.json` の正解ラベル付きサンプル（`SAMPLE_DIR`、既定 `D:/camera-example`）から数字モデルを作り直す
-- `pnpm eval`: 実画像サンプルでの読み取り評価
-
-## 現状
-
-- 曲マスタは BPIM2 の `GET /api/v2/songs/master`（BPIM2 PR #699）。デプロイ前や失敗時は同梱シード
-- 数字モデルは見本 12 個（数字 1・3・4・5・6・7・9）だけ。0・2・8 の見本がないため、モデルの読み取りは 1 票扱い。実写真での自動確定率は未計測
-- 統計データの R2 送信は実装済みだが、Worker のデプロイと R2 バケット・アクセスキーの用意が必要（未デプロイ）。URL 発行にレート制限・認証はない
-
-## ライセンス
-
-[AGPL-3.0](LICENSE)
+- Real-photo auto-confirm rate has not been measured yet.
+- The digit model has few samples (no 0, 2, 8), so it counts as a single vote.
+- Title reading can still fail on strongly tilted photos or low-contrast (for example pink) titles; the tilt fallback reduces this.
+- The upload endpoint has no rate limit or authentication.
