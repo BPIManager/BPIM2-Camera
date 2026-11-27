@@ -13,7 +13,7 @@ import type { Settings } from "@/lib/storage/settings";
 type Phase = { kind: "checking" } | { kind: "consent"; items: PrefetchItem[] } | { kind: "downloading"; loaded: number; total: number } | { kind: "ready" } | { kind: "error"; message: string; items: PrefetchItem[] };
 
 /**
- * 読み取りの最適化。この端末で、サンプル画像を CPU と GPU で読んで速さを測り、速いほうを選ぶ。
+ * 読み取りの準備。この端末で、サンプル画像を CPU と GPU で読んで速さを測り、速いほうを選ぶ。
  * 測る前に、使うモデルとランタイム（数十 MB）を取得する。取得してよいかを、大きさを示して確かめ、同意したらプログレスバーを出して取得する。
  * すでに取得済みなら、確かめずに測る。測り終えたら、選び直すこともできる
  */
@@ -63,8 +63,8 @@ export function OcrStep({ settings, update, onNext }: { settings: Settings; upda
   return (
     <div className="flex min-h-full flex-col gap-6">
       <div className="flex flex-1 flex-col gap-4">
-        <h1 className="text-xl font-semibold">読み取りの最適化</h1>
-        <p className="text-sm leading-relaxed text-muted-foreground">この端末で、読み取りを CPU と GPU のどちらで行うと速いかを測り、速いほうを選びます。</p>
+        <h1 className="text-xl font-semibold">読み取りの準備</h1>
+        <p className="text-sm leading-relaxed text-muted-foreground">リザルトの読み取りに使うデータを端末に保存し、この端末でいちばん速く読める方法を自動で選びます。数十秒ほどかかります。</p>
 
         {phase.kind === "checking" && <p className="text-sm text-muted-foreground">準備しています</p>}
 
