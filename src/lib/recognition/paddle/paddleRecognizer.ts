@@ -78,12 +78,11 @@ async function encode(c: OffscreenCanvas, pixels: boolean): Promise<OcrImage> {
   return (await c.convertToBlob({ type: "image/png" })).arrayBuffer();
 }
 
-/** 枠で切り出した 3 か所を PaddleOCR で読み、合意エンジンで EX を決める。全体画像だけのとき（画像取り込み）は代替の認識器に任せる */
+/** 枠で切り出した 3 か所を PaddleOCR で読み、合意エンジンで EX を決める（撮影も取り込みも同じ） */
 export class PaddleRecognizer implements Recognizer {
   constructor(
     private readonly engine: OcrEngine,
     private readonly getMaster: () => readonly SongMasterEntry[],
-    private readonly fallback?: Recognizer,
     private readonly options: PaddleRecognizerOptions = {},
   ) {}
 
@@ -96,10 +95,8 @@ export class PaddleRecognizer implements Recognizer {
   }
 
   async recognize(input: RecognizeInput): Promise<RawResult | null> {
-    if (!input.regions) {
-      input.onStage?.("画像全体を読んでいます");
-      return this.fallback ? this.fallback.recognize(input) : null;
-    }
+    // 枠で切り出した画像がなければ読めない（撮影も取り込みも、枠で切り出してから読む）
+    if (!input.regions) return null;
     try {
       return await this.recognizeRegions(input, input.regions);
     } finally {

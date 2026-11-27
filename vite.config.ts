@@ -126,7 +126,8 @@ export default defineConfig(({ command }) => ({
         // （/__/ を除外しないと、プロバイダからの戻りの遷移に index.html が返り、サインインが完了しない）
         navigateFallbackDenylist: [/^\/signin\.html/, /^\/__\//],
         // OCR のモデルとランタイム（WASM）は、アプリが自分で取得してキャッシュする（取得の進み具合の表示と、設定からの削除のため。src/lib/recognition/assets.ts）
-        globIgnores: ["models/paddle/**", "bench/**"],
+        // digits.json は数字の学習（評価用）にだけ使う。アプリは読まない
+        globIgnores: ["models/paddle/**", "models/digits.json", "bench/**"],
       },
     }),
   ],

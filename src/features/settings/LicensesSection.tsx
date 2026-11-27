@@ -15,12 +15,6 @@ const EXTRAS: Entry[] = [
     license: "Apache-2.0",
     homepage: "https://github.com/PaddlePaddle/PaddleOCR",
   },
-  {
-    name: "Tesseract OCR 学習データ",
-    version: "",
-    license: "Apache-2.0",
-    homepage: "https://github.com/tesseract-ocr/tessdata",
-  },
 ];
 
 const ALL = [...(licenses as Entry[]), ...EXTRAS];
