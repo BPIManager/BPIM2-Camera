@@ -9,9 +9,9 @@ import type { SongMasterEntry } from "@/lib/songs/types";
  * OCR のエンジン（Worker）を用意し、認識器を返す。モデルは撮影前に読み込んでおく。
  * 処理（GPU / CPU）は設定に従い、未設定なら WebGPU が使えれば GPU。設定が変わったら作り直す。
  * ベンチマークの間は Worker を止める（スマホで、モデルを何組もメモリに載せないため）。enabled が false の間も作らない。
- * 返す関数は、その時点の認識器を返す。
+ * getRecognizer は、その時点の認識器を返す。
  */
-export function useOcrEngine(songs: readonly SongMasterEntry[], preferred: OcrBackend | null, enabled = true): () => Recognizer {
+export function useOcrEngine(songs: readonly SongMasterEntry[], preferred: OcrBackend | null, enabled = true): { getRecognizer: () => Recognizer; backend: OcrBackend | null } {
   const songsRef = useRef(songs);
   songsRef.current = songs;
   const setupRef = useRef<OcrSetup | null>(null);
@@ -40,8 +40,12 @@ export function useOcrEngine(songs: readonly SongMasterEntry[], preferred: OcrBa
     };
   }, [active, backend]);
 
-  return () => {
-    if (!setupRef.current) throw new Error("OCR の準備ができていません。少し待ってから、もう一度お試しください");
-    return setupRef.current.recognizer;
+  return {
+    getRecognizer: () => {
+      if (!setupRef.current) throw new Error("OCR の準備ができていません。少し待ってから、もう一度お試しください");
+      return setupRef.current.recognizer;
+    },
+    /** 使っている処理（WebGPU の有無を調べ終わるまで null） */
+    backend,
   };
 }

@@ -1,13 +1,19 @@
+import type { AssetProgress } from "../assetStore";
+import { reportDownload } from "../downloads";
+import type { OcrBackend } from "../ocrSetup";
 import type { OcrEngine, OcrImage, OcrLine } from "./engine";
-import type { OcrExecutionProvider } from "./ocrWorkerCore";
+import type { OcrExecutionProvider, OcrWorkerConfig } from "./ocrWorkerCore";
 
-type Reply = { id: number; lines?: OcrLine[]; error?: string; provider?: OcrExecutionProvider };
+type Reply = { id: number; lines?: OcrLine[]; error?: string; provider?: OcrExecutionProvider; progress?: AssetProgress };
 
-/** 本読み用（small）の Worker */
-export const createSmallWorker = () => new Worker(new URL("./paddle.worker.ts", import.meta.url), { type: "module" });
-
-/** 自動撮影の下見用（tiny）の Worker */
-export const createTinyWorker = () => new Worker(new URL("./tiny.worker.ts", import.meta.url), { type: "module" });
+/**
+ * OCR の Worker を作る。CPU 用は onnxruntime-web の CPU だけの版、GPU 用は WebGPU も使える版（CPU でも読める）。
+ * どのモデルを読むか（本読み・自動撮影の下見）は、設定（OcrWorkerConfig）で決める
+ */
+export const createOcrWorker = (flavor: OcrBackend) => () =>
+  flavor === "cpu"
+    ? new Worker(new URL("./ocr.cpu.worker.ts", import.meta.url), { type: "module" })
+    : new Worker(new URL("./ocr.gpu.worker.ts", import.meta.url), { type: "module" });
 
 /** PaddleOCR を Worker で動かし、画像バイト列を渡して行を受け取る（メインスレッドを止めない） */
 export class WorkerOcrEngine implements OcrEngine {
@@ -18,15 +24,20 @@ export class WorkerOcrEngine implements OcrEngine {
   private pending = new Map<number, { resolve: (l: OcrLine[]) => void; reject: (e: Error) => void }>();
 
   constructor(
-    private readonly createWorker: () => Worker = createSmallWorker,
-    /** WASM のスレッド数（未指定なら onnxruntime の既定。コア数の半分、最大 4）と、推論に使うもの */
-    private readonly config: { threads?: number; ep?: OcrExecutionProvider; models?: { detection?: string; recognition?: string } } = {},
+    private readonly createWorker: () => Worker,
+    /** WASM のスレッド数（未指定なら onnxruntime の既定。コア数の半分、最大 4）・推論に使うもの・読むモデル */
+    private readonly config: OcrWorkerConfig = {},
   ) {}
 
   private ensure(): Worker {
     if (this.worker) return this.worker;
     const w = this.createWorker();
     w.onmessage = (e: MessageEvent<Reply>) => {
+      // モデル・ランタイムの取得の進み具合（画面に出す）
+      if (e.data.progress) {
+        reportDownload(e.data.progress);
+        return;
+      }
       const p = this.pending.get(e.data.id);
       if (!p) return;
       this.pending.delete(e.data.id);

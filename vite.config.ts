@@ -67,8 +67,37 @@ function ocrDebugLog(): Plugin {
   };
 }
 
-export default defineConfig({
+/**
+ * onnxruntime-web の版を、Worker ごとに出し分ける。CPU の Worker（*.cpu.worker.ts）は CPU だけの版（WASM 約 15MB）、
+ * それ以外は WebGPU も使える版（約 29MB）。CPU だけで読む端末が、使わない GPU 用のランタイムを取得しなくて済むように。
+ * ランタイムの WASM の URL は virtual:ort-runtime-cpu / -gpu から読む（アプリが取得とキャッシュを管理する）。
+ * 開発サーバーでは Worker のモジュールを共有するので、出し分けられない。どちらも WebGPU 版を使う
+ */
+function ortFlavor(mode: "serve" | "build", worker = false): Plugin {
+  let flavor: "wasm" | "webgpu" = "webgpu";
+  const RUNTIME = { wasm: "onnxruntime-web/ort-wasm-simd-threaded.wasm?url", webgpu: "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url" };
+  return {
+    name: "ort-flavor",
+    enforce: "pre",
+    options(o) {
+      if (worker && mode === "build") flavor = JSON.stringify(o.input ?? "").includes(".cpu.worker") ? "wasm" : "webgpu";
+    },
+    resolveId(id, importer) {
+      if (id === "onnxruntime-web") return this.resolve(`onnxruntime-web/${flavor}`, importer, { skipSelf: true });
+      if (id === "virtual:ort-runtime-cpu" || id === "virtual:ort-runtime-gpu") return "\0" + id;
+      return null;
+    },
+    load(id) {
+      if (id === "\0virtual:ort-runtime-gpu") return `export { default } from ${JSON.stringify(RUNTIME.webgpu)};`;
+      if (id === "\0virtual:ort-runtime-cpu") return `export { default } from ${JSON.stringify(mode === "serve" ? RUNTIME.webgpu : RUNTIME.wasm)};`;
+      return null;
+    },
+  };
+}
+
+export default defineConfig(({ command }) => ({
   plugins: [
+    ortFlavor(command),
     isolation(),
     ocrDebugLog(),
     react(),
@@ -92,19 +121,12 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // 大きいもの（OCR のモデル・WASM）は事前取得せず、初めて使ったときに保存する
         globPatterns: ["**/*.{js,css,html,png,json}"],
         // サインインページと Firebase の中継（/__/auth/handler など）はアプリ本体に置き換えず、そのまま取得する
         // （/__/ を除外しないと、プロバイダからの戻りの遷移に index.html が返り、サインインが完了しない）
         navigateFallbackDenylist: [/^\/signin\.html/, /^\/__\//],
-        globIgnores: ["models/paddle/**"],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith("/models/paddle/") || url.pathname.endsWith(".wasm"),
-            handler: "CacheFirst",
-            options: { cacheName: "ocr-assets", expiration: { maxEntries: 8 }, cacheableResponse: { statuses: [0, 200] } },
-          },
-        ],
+        // OCR のモデルとランタイム（WASM）は、アプリが自分で取得してキャッシュする（取得の進み具合の表示と、設定からの削除のため。src/lib/recognition/assets.ts）
+        globIgnores: ["models/paddle/**", "bench/**"],
       },
     }),
   ],
@@ -113,8 +135,8 @@ export default defineConfig({
   server: { host: true, allowedHosts: [".ts.net"], proxy: PROXY },
   preview: { proxy: PROXY },
   build: { rollupOptions: { input: { main: path.resolve(import.meta.dirname, "index.html"), signin: path.resolve(import.meta.dirname, "signin.html") } } },
-  // PaddleOCR は、WebGPU が使える端末では GPU、なければ CPU（WASM）で動かす。WebGPU も使える版は WASM が約 30MB（CPU だけの版は約 15MB）だが、
-  // 実機で約 45% 速くなる（初回だけ取得してキャッシュする）
-  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src"), "onnxruntime-web": "onnxruntime-web/webgpu" } },
+  // onnxruntime-web の版は ortFlavor で出し分ける
+  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
+  worker: { plugins: () => [ortFlavor(command, true)] },
   test: { environment: "node", include: ["test/**/*.test.ts"] },
-});
+}));

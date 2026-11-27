@@ -1,7 +1,7 @@
 import { TesseractRecognizer } from "./ocr/tesseractRecognizer";
 import { EnginePool } from "./paddle/enginePool";
 import { PaddleRecognizer } from "./paddle/paddleRecognizer";
-import { WorkerOcrEngine } from "./paddle/workerEngine";
+import { createOcrWorker, WorkerOcrEngine } from "./paddle/workerEngine";
 import type { Recognizer } from "./recognizer";
 import type { SongMasterEntry } from "@/lib/songs/types";
 
@@ -24,8 +24,8 @@ export interface OcrSetup {
  */
 export function createOcrSetup(backend: OcrBackend, getMaster: () => readonly SongMasterEntry[]): OcrSetup {
   const ep = backend === "gpu" ? "webgpu" : "wasm";
-  const titleWorker = new WorkerOcrEngine(undefined, { ep });
-  const passWorker = backend === "cpu" ? new WorkerOcrEngine(undefined, { ep }) : undefined;
+  const titleWorker = new WorkerOcrEngine(createOcrWorker(backend), { ep });
+  const passWorker = backend === "cpu" ? new WorkerOcrEngine(createOcrWorker(backend), { ep }) : undefined;
   const workers = passWorker ? [titleWorker, passWorker] : [titleWorker];
   // 枠で撮った画像は PaddleOCR、全体画像の取り込みは Tesseract で読む
   const recognizer = new PaddleRecognizer(titleWorker, getMaster, new TesseractRecognizer(getMaster), {

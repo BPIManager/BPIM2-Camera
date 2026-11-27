@@ -7,6 +7,8 @@ import CameraPicker from "@/components/camera-picker";
 import DebugSection from "./DebugSection";
 import LicensesSection from "./LicensesSection";
 import OcrSection from "./OcrSection";
+import AssetsSection from "./AssetsSection";
+import type { OcrBackend } from "@/lib/recognition/ocrSetup";
 import ConfirmDialog from "@/components/confirm-dialog";
 import GuideEditor from "./GuideEditor";
 import Label from "@/components/ui/label";
@@ -24,6 +26,8 @@ interface Props {
   /** アプリとして追加できる（まだアプリとして開いていない）か */
   installable: boolean;
   onOpenInstall: () => void;
+  /** いま使っている読み取りの処理（取得済みのモデルのうち、どれを使っているかの判断に使う）。分かるまでは null */
+  ocrBackend: OcrBackend | null;
 }
 
 function Row({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
@@ -38,7 +42,7 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint?: 
   );
 }
 
-export default function SettingsView({ settings, update, viewSize, installable, onOpenInstall }: Props) {
+export default function SettingsView({ settings, update, viewSize, installable, onOpenInstall, ocrBackend }: Props) {
   const [editingGuides, setEditingGuides] = useState(false);
   const [sampleCount, setSampleCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
@@ -93,6 +97,7 @@ export default function SettingsView({ settings, update, viewSize, installable, 
         <CameraPicker value={settings.cameraId} onChange={(cameraId) => update({ cameraId })} />
       </div>
       <OcrSection settings={settings} update={update} />
+      <AssetsSection ctx={ocrBackend ? { backend: ocrBackend, autoCapture: settings.autoCapture } : null} />
       <Row id="auto" label="自動撮影" hint="枠に画面を合わせて静止すると、自動で読み取ります">
         <Switch id="auto" checked={settings.autoCapture} onCheckedChange={(v) => update({ autoCapture: v })} />
       </Row>

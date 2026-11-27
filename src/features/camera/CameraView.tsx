@@ -4,6 +4,7 @@ import Button from "@/components/ui/button";
 import ScanOverlay from "./ScanOverlay";
 import { useCamera } from "@/hooks/useCamera";
 import { useAutoCapture } from "./useAutoCapture";
+import type { OcrBackend } from "@/lib/recognition/ocrSetup";
 import type { SongProgress } from "@/lib/recognition/recognizer";
 import type { Size } from "@/lib/vision/framing";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,8 @@ interface Props {
   cameraId: string | null;
   /** 枠をなぞって動かしたとき（指を離したときに 1 回）。新しい配置を保存する */
   onLayoutChange: (layout: GuideLayout) => void;
+  /** 読み取りの処理（自動撮影の下見も、同じ版のランタイムを使う）。決まるまで（null の間）は、自動撮影を始めない */
+  ocrBackend: OcrBackend | null;
 }
 
 const CORNERS: { corner: Corner; pos: string }[] = [
@@ -44,7 +47,7 @@ const CORNERS: { corner: Corner; pos: string }[] = [
 type Drag = { key: GuideKey; mode: "move" | Corner; x: number; y: number; start: GuideLayout[GuideKey] };
 
 /** スコアと曲名帯の位置を白枠で示す。シャッター時は各枠の中を切り出して読み取る */
-export default function CameraView({ active, busy, stage, song, layout, layoutAspect, onViewSize, onCapture, onCancel, autoCapture, cameraId, onLayoutChange }: Props) {
+export default function CameraView({ active, busy, stage, song, layout, layoutAspect, onViewSize, onCapture, onCancel, autoCapture, cameraId, onLayoutChange, ocrBackend }: Props) {
   const { videoRef, state, snapshot, zoom, zoomInfo, setZoom, grabGray, grabRegions } = useCamera(active, cameraId);
   const fileRef = useRef<HTMLInputElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
@@ -154,7 +157,8 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
   // 自動撮影: 静止して、枠に画面が合ったら、シャッターを押したのと同じ撮影を始める。
   // 結果の画面が開いている間（active が false）は止め、読み取り中は一時停止する
   const detected = useAutoCapture({
-    enabled: autoCapture && active && state === "ready",
+    enabled: autoCapture && active && state === "ready" && ocrBackend !== null,
+    backend: ocrBackend ?? "cpu",
     // 枠をなぞっている間は、下見も撮影も止める
     paused: busy || draft !== null,
     grabGray,
