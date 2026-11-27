@@ -1,6 +1,6 @@
 import type { Settings } from "@/lib/storage/settings";
 import type { TrainingSample } from "@/lib/storage/db";
-import { listSamples, markUploaded } from "@/lib/storage/samples";
+import { listSamples, markUploaded, needsUpload } from "@/lib/storage/samples";
 import { sampleLabel } from "./exportZip";
 
 interface PresignedUpload {
@@ -13,6 +13,8 @@ export interface UploadOptions {
   /** 署名付き URL を発行する Worker のエンドポイント（`/v1/upload-urls` までを含む） */
   endpoint: string;
   deviceId: string;
+  /** 画像（スコア部・曲名帯・判定表）も送るか。false なら labels.json だけ送る */
+  includeImage?: boolean;
   fetchImpl?: typeof fetch;
 }
 
@@ -25,28 +27,27 @@ export interface FlushResult {
 /** 送信先。ビルド時の環境変数。空なら送信しない */
 export const uploadEndpoint = (): string => import.meta.env.VITE_STATS_UPLOAD_ENDPOINT ?? "";
 
-/** 送信してよい設定か。同意があり、画像を含める設定のとき（サンプルは画像が本体） */
-export const canUpload = (s: Pick<Settings, "statsConsent" | "statsIncludeImage">): boolean =>
-  s.statsConsent === true && s.statsIncludeImage;
+/** 送信してよい設定か。同意があるとき（画像を含めない設定なら、labels.json だけ送る） */
+export const canUpload = (s: Pick<Settings, "statsConsent">): boolean => s.statsConsent === true;
 
 /** 1 サンプルを送る。署名付き URL を 1 回で受け取り、画像とラベルを R2 へ直接 PUT する */
-export async function uploadSample(sample: TrainingSample, { endpoint, deviceId, fetchImpl = fetch }: UploadOptions): Promise<void> {
+export async function uploadSample(sample: TrainingSample, { endpoint, deviceId, includeImage = true, fetchImpl = fetch }: UploadOptions): Promise<void> {
   const labels = new Blob(
     [
       JSON.stringify(
         sampleLabel(sample, {
-          scoreImage: "score.jpg",
-          titleImage: "title.jpg",
-          judgeImage: sample.judgeCrop ? "judge.jpg" : undefined,
+          scoreImage: includeImage ? "score.jpg" : undefined,
+          titleImage: includeImage ? "title.jpg" : undefined,
+          judgeImage: includeImage && sample.judgeCrop ? "judge.jpg" : undefined,
         }),
       ),
     ],
     { type: "application/json" },
   );
   const parts: Record<PresignedUpload["name"], Blob | undefined> = {
-    score: sample.scoreCrop,
-    title: sample.titleCrop,
-    judge: sample.judgeCrop,
+    score: includeImage ? sample.scoreCrop : undefined,
+    title: includeImage ? sample.titleCrop : undefined,
+    judge: includeImage ? sample.judgeCrop : undefined,
     labels,
   };
   const names = (Object.keys(parts) as PresignedUpload["name"][]).filter((n) => parts[n]);
@@ -78,10 +79,10 @@ export function flushSamples(opts: UploadOptions): Promise<FlushResult> {
     const result: FlushResult = { uploaded: 0, failed: 0 };
     try {
       for (const s of await listSamples()) {
-        if (s.uploadedAt !== undefined) continue;
+        if (!needsUpload(s, opts.includeImage ?? true)) continue;
         try {
           await uploadSample(s, opts);
-          await markUploaded(s.id, s.rev ?? 0);
+          await markUploaded(s.id, s.rev ?? 0, opts.includeImage ?? true);
           result.uploaded++;
         } catch {
           result.failed++;
@@ -101,5 +102,5 @@ export function flushSamples(opts: UploadOptions): Promise<FlushResult> {
 export function flushIfEnabled(settings: Pick<Settings, "statsConsent" | "statsIncludeImage" | "deviceId">): Promise<FlushResult> | null {
   const endpoint = uploadEndpoint();
   if (!endpoint || !canUpload(settings)) return null;
-  return flushSamples({ endpoint, deviceId: settings.deviceId });
+  return flushSamples({ endpoint, deviceId: settings.deviceId, includeImage: settings.statsIncludeImage });
 }

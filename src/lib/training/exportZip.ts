@@ -18,15 +18,16 @@ export interface TrainingLabel {
   confirmed: boolean;
   autoConfirmed: boolean;
   correctedFields: string[];
-  scoreImage: string;
-  titleImage: string;
+  /** 画像を送らない設定のときは、画像の項目がない */
+  scoreImage?: string;
+  titleImage?: string;
   judgeImage?: string;
   /** OCR が読んだ文字と確度・確定した結果（正解ラベルと突き合わせて、読み間違いを調べる） */
   ocr?: OcrTrace;
 }
 
 /** 正解ラベル。画像のパスは、zip や R2 のなかでの名前を呼び出し側が決める */
-export function sampleLabel(s: TrainingSample, images: { scoreImage: string; titleImage: string; judgeImage?: string }): TrainingLabel {
+export function sampleLabel(s: TrainingSample, images: { scoreImage?: string; titleImage?: string; judgeImage?: string }): TrainingLabel {
   return {
     id: s.id,
     createdAt: s.createdAt,

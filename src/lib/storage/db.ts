@@ -26,6 +26,8 @@ export interface TrainingSample {
   judgeCrop?: Blob;
   /** サーバーへ送り終えた時刻（ms）。未送信は undefined */
   uploadedAt?: number;
+  /** 送信済みのとき、画像も送ったか。画像なし（labels だけ）で送ったあとに、設定で画像を含めるようにしたら、送り直す */
+  uploadedWithImage?: boolean;
   /** OCR の読み取りの記録（読んだ文字と確度・確定した結果）。古いサンプルにはない */
   ocr?: OcrTrace;
 }

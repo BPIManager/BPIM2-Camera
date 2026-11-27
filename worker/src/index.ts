@@ -47,7 +47,9 @@ function parse(raw: unknown): Body | string {
     if (typeof f.size !== "number" || !Number.isInteger(f.size) || f.size <= 0 || f.size > limit) return `${name} のサイズが不正です`;
     files.push({ name: name as Kind, size: f.size });
   }
-  if (!seen.has("labels") || !seen.has("score") || !seen.has("title")) return "labels・score・title は必須です";
+  // 画像は任意（画像を含めない設定のときは labels だけが届く）。ただし画像を送るなら score・title はそろえる
+  if (!seen.has("labels")) return "labels は必須です";
+  if (seen.has("score") !== seen.has("title")) return "score と title は、そろえて送ってください";
   return { deviceId: b.deviceId, id: b.id, files };
 }
 

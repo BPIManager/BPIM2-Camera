@@ -110,6 +110,19 @@ describe("flushSamples", () => {
     expect(await flushSamples(opts(f as unknown as typeof fetch))).toEqual({ uploaded: 1, failed: 0 });
   });
 
+  it("画像を含めない設定なら labels だけ送り、あとで画像を含めると画像つきで送り直す", async () => {
+    await saveSample(sample("sample-0001"));
+    const f = fakeFetch();
+    expect(await flushSamples({ ...opts(f as unknown as typeof fetch), includeImage: false })).toEqual({ uploaded: 1, failed: 0 });
+    // URL 発行 1 回 + PUT 1 回（labels のみ）
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(f.mock.calls[0]?.[1]?.body)).files).toEqual([{ name: "labels", size: expect.any(Number) }]);
+    expect(await countPendingSamples(false)).toBe(0);
+    expect(await countPendingSamples(true)).toBe(1);
+    expect(await flushSamples({ ...opts(f as unknown as typeof fetch), includeImage: true })).toEqual({ uploaded: 1, failed: 0 });
+    expect(await countPendingSamples(true)).toBe(0);
+  });
+
   it("PUT に失敗したサンプルは未送信のまま残す", async () => {
     await saveSample(sample("sample-0001"));
     expect(await flushSamples(opts(fakeFetch(true) as unknown as typeof fetch))).toEqual({ uploaded: 0, failed: 1 });
@@ -118,9 +131,9 @@ describe("flushSamples", () => {
 });
 
 describe("canUpload", () => {
-  it("同意があり、画像を含める設定のときだけ送る", () => {
-    expect(canUpload({ statsConsent: true, statsIncludeImage: true })).toBe(true);
-    expect(canUpload({ statsConsent: true, statsIncludeImage: false })).toBe(false);
-    expect(canUpload({ statsConsent: null, statsIncludeImage: true })).toBe(false);
+  it("同意があるときだけ送る", () => {
+    expect(canUpload({ statsConsent: true })).toBe(true);
+    expect(canUpload({ statsConsent: null })).toBe(false);
+    expect(canUpload({ statsConsent: false })).toBe(false);
   });
 });
