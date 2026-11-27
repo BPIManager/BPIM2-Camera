@@ -6,6 +6,6 @@
   "compatibility_date": "2026-11-01",
   "vars": {
     "R2_BUCKET": "bpim2cam",
-    "ALLOWED_ORIGINS": "http://localhost:5173"
+    "ALLOWED_ORIGINS": "https://bpi-cam.poyashi.me,http://localhost:5173"
   }
 }
