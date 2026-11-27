@@ -67,10 +67,13 @@ export function rawFromRegions(
           ...new Set([
             ...crossValues.filter((v) => v >= 100 && v <= notes * 2),
             ...strongValues.filter((v) => v >= 100 && v <= notes * 2 && consistentWithPg(v, notes, judgePool)),
-            ...approximatePairs(judgePool, notes, scoreNumbers, scoreConfidence),
+            ...approximatePairs(judgePool, notes, scoreNumbers, scoreConfidence, scoreReadings),
           ]),
         ];
-  const exValue = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? (fallback.length === 1 ? fallback[0] : null) : vote.value;
+  const decided = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? (fallback.length === 1 ? fallback[0] : null) : vote.value;
+  // 歯止め: スコア欄が、ある値を何度も確かに読んでいる（strongValues）のに、別の値に決まりそうなら決めない。
+  // 判定表の誤読から作った値が、確かなスコア欄の読みに競り勝つのを防ぐ（#3）
+  const exValue = decided !== null && strongValues.length === 1 && strongValues[0] !== decided ? null : decided;
   const exCandidates = exValue !== null ? [] : [...new Set([...(consensus?.ranked.map((c) => c.value) ?? []), ...vote.candidates])].slice(0, 3);
   if (hints.difficulty === null && hints.notes === null && titleText === null && vote.candidates.length === 0) return null;
 
@@ -113,7 +116,17 @@ export const TRUSTED_SCORE_CONFIDENCE = 95;
  * 1 桁違いの相手のスコア欄の読みが十分に確か（TRUSTED_SCORE_CONFIDENCE 以上）なら、その値は採らない。
  * 判定表の数字は小さく、スコア欄より読み違えやすい（実機で 2829（確度 98）を 2827、2338 を 2238 と誤確定した。#3）
  */
-export function approximatePairs(pool: readonly JudgeRead[], notes: number, scores: readonly number[], scoreConfidence: ReadonlyMap<number, number> = new Map()): number[] {
+export function approximatePairs(
+  pool: readonly JudgeRead[],
+  notes: number,
+  scores: readonly number[],
+  scoreConfidence: ReadonlyMap<number, number> = new Map(),
+  /**
+   * スコア欄の読み（前処理ごと）。3 回以上読んでいるのに、1 桁違い以内の値が 1 回の読みにしか出ていなければ採らない
+   * （読みがばらばらなときの 1 回だけの読みは、誤読と区別できない。読みが 1〜2 回なら、従来どおり 1 回でも採る）
+   */
+  readings?: readonly (readonly string[])[],
+): number[] {
   const out = new Set<number>();
   for (const pgRead of pool) {
     for (const grRead of pool) {
@@ -126,6 +139,7 @@ export function approximatePairs(pool: readonly JudgeRead[], notes: number, scor
       if (near.length === 0) continue;
       // スコア欄が別の値を確かに読んでいれば、判定表の誤読とみなす
       if (near.some((s) => s !== ex && (scoreConfidence.get(s) ?? 0) >= TRUSTED_SCORE_CONFIDENCE)) continue;
+      if (readings && readings.filter((rd) => rd.length > 0).length >= 3 && readings.filter((rd) => rd.some((v) => editDistance(v, String(ex)) <= 1)).length < 2) continue;
       out.add(ex);
     }
   }
