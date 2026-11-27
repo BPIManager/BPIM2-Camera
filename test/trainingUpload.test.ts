@@ -57,6 +57,13 @@ describe("署名付き URL を発行する Worker", () => {
     expect(uploads[0].url).toContain("X-Amz-SignedHeaders=content-type%3Bhost");
   });
 
+  it("パネルの中のほかの欄（使用オプション・FAST/SLOW・ミスカウント）の画像も受け付ける", async () => {
+    const res = await handle(req({ ...good, files: [...good.files, { name: "useOption", size: 3 }, { name: "fastSlow", size: 3 }, { name: "missCount", size: 3 }] }), env);
+    expect(res.status).toBe(200);
+    const { uploads } = (await res.json()) as { uploads: { name: string; url: string }[] };
+    expect(uploads.find((u) => u.name === "missCount")?.url).toContain(`/sample-0001/missCount.jpg?`);
+  });
+
   it.each([
     ["パスを抜ける id", { ...good, id: "../../etc" }],
     ["未知のファイル名", { ...good, files: [...good.files, { name: "evil", size: 1 }] }],
@@ -121,6 +128,28 @@ describe("flushSamples", () => {
     expect(await countPendingSamples(true)).toBe(1);
     expect(await flushSamples({ ...opts(f as unknown as typeof fetch), includeImage: true })).toEqual({ uploaded: 1, failed: 0 });
     expect(await countPendingSamples(true)).toBe(0);
+  });
+
+  it("パネルの中のほかの欄の切り出しと、確定した値も送る（labels に R2 でのファイル名を書く）", async () => {
+    const jpg = () => new Blob([new Uint8Array([9])], { type: "image/jpeg" });
+    await saveSample({ ...sample("sample-0001"), extraCrops: { useOption: jpg(), missCount: jpg() }, useOption: "RANDOM", missCount: 4, fast: 65, slow: 119 });
+    const f = fakeFetch();
+    expect(await flushSamples(opts(f as unknown as typeof fetch))).toEqual({ uploaded: 1, failed: 0 });
+    expect(JSON.parse(String(f.mock.calls[0]?.[1]?.body)).files.map((x: { name: string }) => x.name)).toEqual(["score", "title", "useOption", "missCount", "labels"]);
+    const labelsPut = f.mock.calls.find((c) => String(c[0]).endsWith("/labels"));
+    const labels = JSON.parse(await (labelsPut?.[1]?.body as Blob).text());
+    expect(labels).toMatchObject({ useOption: "RANDOM", missCount: 4, fast: 65, slow: 119, useOptionImage: "useOption.jpg", missCountImage: "missCount.jpg" });
+  });
+
+  it("送信先の Worker が古く、ほかの欄の画像を断られたら、それを除いて送り直す", async () => {
+    await saveSample({ ...sample("sample-0001"), extraCrops: { useOption: new Blob([new Uint8Array([9])], { type: "image/jpeg" }) } });
+    const ok = fakeFetch();
+    const f = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url) === "https://w.example/v1/upload-urls" && String(init?.body).includes("useOption")) return new Response(JSON.stringify({ error: "ファイル名が不正です" }), { status: 400 });
+      return ok(url, init);
+    });
+    expect(await flushSamples(opts(f as unknown as typeof fetch))).toEqual({ uploaded: 1, failed: 0 });
+    expect(await countPendingSamples()).toBe(0);
   });
 
   it("PUT に失敗したサンプルは未送信のまま残す", async () => {

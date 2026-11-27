@@ -1,10 +1,12 @@
 import type { Settings } from "@/lib/storage/settings";
 import type { TrainingSample } from "@/lib/storage/db";
 import { listSamples, markUploaded, needsUpload } from "@/lib/storage/samples";
-import { sampleLabel } from "./exportZip";
+import { EXTRA_IMAGES, sampleLabel, type LabelImages } from "./exportZip";
+
+type PartName = "score" | "title" | "judge" | "labels" | "useOption" | "fastSlow" | "missCount";
 
 interface PresignedUpload {
-  name: "score" | "title" | "judge" | "labels";
+  name: PartName;
   url: string;
   contentType: string;
 }
@@ -31,32 +33,58 @@ export const uploadEndpoint = (): string => import.meta.env.VITE_STATS_UPLOAD_EN
 export const canUpload = (s: Pick<Settings, "statsConsent">): boolean => s.statsConsent === true;
 
 /** 1 サンプルを送る。署名付き URL を 1 回で受け取り、画像とラベルを R2 へ直接 PUT する */
-export async function uploadSample(sample: TrainingSample, { endpoint, deviceId, includeImage = true, fetchImpl = fetch }: UploadOptions): Promise<void> {
-  const labels = new Blob(
+export async function uploadSample(sample: TrainingSample, opts: UploadOptions): Promise<void> {
+  try {
+    await uploadParts(sample, opts, true);
+  } catch (e) {
+    // 送信先の Worker が古く、パネルの中のほかの欄（使用オプション・FAST/SLOW・ミスカウント）の画像を受け付けないときは、それを除いて送り直す
+    if (e instanceof RejectedError && hasExtras(sample, opts)) await uploadParts(sample, opts, false);
+    else throw e;
+  }
+}
+
+/** 署名付き URL の発行を断られた（送るファイルの組が受け付けられない） */
+class RejectedError extends Error {}
+
+const hasExtras = (s: TrainingSample, { includeImage = true }: UploadOptions) => includeImage && EXTRA_IMAGES.some(([k]) => s.extraCrops?.[k]);
+
+async function uploadParts(sample: TrainingSample, { endpoint, deviceId, includeImage = true, fetchImpl = fetch }: UploadOptions, withExtras: boolean): Promise<void> {
+  const extraNames: LabelImages = {};
+  const parts: Partial<Record<PartName, Blob>> = {
+    score: includeImage ? sample.scoreCrop : undefined,
+    title: includeImage ? sample.titleCrop : undefined,
+    judge: includeImage ? sample.judgeCrop : undefined,
+  };
+  if (includeImage && withExtras) {
+    for (const [k] of EXTRA_IMAGES) {
+      const blob = sample.extraCrops?.[k];
+      if (!blob) continue;
+      parts[k] = blob;
+      // R2 では、Worker が「種類名.jpg」で保存する
+      extraNames[`${k}Image`] = `${k}.jpg`;
+    }
+  }
+  parts.labels = new Blob(
     [
       JSON.stringify(
         sampleLabel(sample, {
           scoreImage: includeImage ? "score.jpg" : undefined,
           titleImage: includeImage ? "title.jpg" : undefined,
           judgeImage: includeImage && sample.judgeCrop ? "judge.jpg" : undefined,
+          ...extraNames,
         }),
       ),
     ],
     { type: "application/json" },
   );
-  const parts: Record<PresignedUpload["name"], Blob | undefined> = {
-    score: includeImage ? sample.scoreCrop : undefined,
-    title: includeImage ? sample.titleCrop : undefined,
-    judge: includeImage ? sample.judgeCrop : undefined,
-    labels,
-  };
-  const names = (Object.keys(parts) as PresignedUpload["name"][]).filter((n) => parts[n]);
+  const names = (Object.keys(parts) as PartName[]).filter((n) => parts[n]);
 
   const res = await fetchImpl(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ deviceId, id: sample.id, files: names.map((name) => ({ name, size: parts[name]!.size })) }),
   });
+  if (res.status === 400) throw new RejectedError(`署名付き URL を取得できません (${res.status})`);
   if (!res.ok) throw new Error(`署名付き URL を取得できません (${res.status})`);
   const { uploads } = (await res.json()) as { uploads: PresignedUpload[] };
 

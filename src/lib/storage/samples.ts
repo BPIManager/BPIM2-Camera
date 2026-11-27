@@ -36,7 +36,7 @@ export async function markUploaded(id: string, rev: number, withImage: boolean, 
 /** 読み取り後に貯めたサンプルへ、ユーザーが確定した値（正解ラベル）を入れる。送信済みでも、送り直すよう未送信に戻す */
 export async function confirmSample(
   id: string,
-  label: Pick<TrainingSample, "chart" | "exScore" | "autoConfirmed" | "correctedFields">,
+  label: Pick<TrainingSample, "chart" | "exScore" | "autoConfirmed" | "correctedFields"> & Partial<Pick<TrainingSample, "useOption" | "missCount" | "fast" | "slow">>,
 ): Promise<boolean> {
   const db = await getDb();
   const s = await db.get("samples", id);

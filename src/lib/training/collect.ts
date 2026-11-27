@@ -23,6 +23,7 @@ export async function collectReadSample(draft: Draft, settings: Pick<Settings, "
     scoreCrop: draft.regions.score,
     titleCrop: draft.regions.title,
     judgeCrop: draft.regions.judge,
+    extraCrops: draft.extraCrops,
     ocr: draft.ocr,
   });
   return true;

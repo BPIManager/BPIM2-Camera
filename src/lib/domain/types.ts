@@ -85,6 +85,9 @@ export interface ResultRecord {
   bestClearType: ClearType | null;
   djLevel: DjLevel | null;
   useOption: string | null;
+  /** FAST・SLOW の数（結果画面で入力）。古い記録にはない */
+  fast?: number | null;
+  slow?: number | null;
   /** BPI。算出対象外・未算出のときは null */
   bpi: number | null;
   bpiStatus: BpiStatus;

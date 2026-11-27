@@ -120,6 +120,10 @@ export default function ResultDrawer({
         exScore: ed.record.exScore,
         autoConfirmed: ed.record.correctedFields.length === 0 && draft.resolution?.autoConfirm === true,
         correctedFields: ed.record.correctedFields,
+        useOption: ed.record.useOption,
+        missCount: ed.record.missCount,
+        fast: ed.record.fast ?? null,
+        slow: ed.record.slow ?? null,
       };
       // 確定の操作は待たせない
       void confirmSample(draft.id, label)
@@ -327,7 +331,12 @@ export default function ResultDrawer({
                   0〜{ed.chart.notes * 2} の範囲で入力してください
                 </p>
               )}
-              <ResultDetails useOption={ed.useOption} onUseOption={ed.setUseOption} />
+              <ResultDetails
+                useOption={ed.useOption}
+                onUseOption={ed.setUseOption}
+                counts={ed.counts}
+                onCount={ed.setCount}
+              />
             </div>
           </div>
 
