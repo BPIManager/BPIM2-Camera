@@ -8,6 +8,8 @@ import { GUIDE_KEYS, type GuideKey, type GuideRects } from "@/lib/vision/guides"
 export interface Snapshot {
   image: Blob;
   regions?: Record<GuideKey, Blob>;
+  /** 枠の位置（image の画素）。パネルの中のほかの欄（使用オプションなど）の位置を求めるのに使う */
+  frames?: Record<GuideKey, Rect>;
 }
 
 const toBlob = (c: HTMLCanvasElement) => new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/jpeg", 0.92));
@@ -134,7 +136,14 @@ export function useCamera(enabled: boolean, deviceId: string | null = null) {
     if (!guides) return { image };
     const crops = await Promise.all(GUIDE_KEYS.map(async (k) => [k, await crop(toRect(guides.rects[k]))] as const));
     if (crops.some(([, b]) => !b)) return { image };
-    return { image, regions: Object.fromEntries(crops) as Record<GuideKey, Blob> };
+    // 保存する画像（デジタルズーム中は見えている範囲）での、枠の位置
+    const frames = Object.fromEntries(
+      GUIDE_KEYS.map((k) => {
+        const r = toRect(guides.rects[k]);
+        return [k, visible ? { ...r, x: r.x - visible.x, y: r.y - visible.y } : r];
+      }),
+    ) as Record<GuideKey, Rect>;
+    return { image, regions: Object.fromEntries(crops) as Record<GuideKey, Blob>, frames };
   }, []);
 
   /** 自動撮影の静止の判定用に、映像を小さな輝度画像にして返す（保存や撮影はしない。軽い） */

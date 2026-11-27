@@ -8,7 +8,18 @@ import type { SongMasterEntry } from "@/lib/songs/types";
 import type { Settings } from "@/lib/storage/settings";
 import { collectReadSample } from "@/lib/training/collect";
 import { flushIfEnabled } from "@/lib/training/upload";
+import type { OcrEngine } from "@/lib/recognition/paddle/engine";
+import { cropPixels, readUseOption } from "@/lib/recognition/useOption";
+import type { Rect } from "@/lib/vision/framing";
 import type { GuideKey } from "@/lib/vision/guides";
+import { panelRegions, type PanelRegion } from "@/lib/vision/panelRegions";
+
+/** パネルの中のほかの欄を、JPEG に切り出す（学習サンプル用） */
+async function cropBlob(image: ImageBitmap, r: Rect): Promise<Blob> {
+  const c = new OffscreenCanvas(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)));
+  c.getContext("2d")!.drawImage(image, r.x, r.y, r.width, r.height, 0, 0, c.width, c.height);
+  return c.convertToBlob({ type: "image/jpeg", quality: 0.92 });
+}
 
 export type CaptureSource = Draft["source"];
 
@@ -16,7 +27,18 @@ export type CaptureSource = Draft["source"];
  * 撮影・取り込んだ画像を読み取り、結果（Draft）を作る。読み取り中の段階と曲の確定状況を画面に出せるよう持ち、中止もできる。
  * 読み終わったら（成功・失敗を問わず）学習サンプルとして貯めて送る。
  */
-export function useCaptureReader({ getRecognizer, songs, settings }: { getRecognizer: () => Recognizer; songs: readonly SongMasterEntry[]; settings: Settings }) {
+export function useCaptureReader({
+  getRecognizer,
+  getEngine,
+  songs,
+  settings,
+}: {
+  getRecognizer: () => Recognizer;
+  /** 使用オプションを読む OCR。準備ができていなければ null */
+  getEngine: () => OcrEngine | null;
+  songs: readonly SongMasterEntry[];
+  settings: Settings;
+}) {
   const [busy, setBusy] = useState(false);
   /** 読み取り中の段階。画面に出す */
   const [stage, setStage] = useState<string | null>(null);
@@ -29,7 +51,7 @@ export function useCaptureReader({ getRecognizer, songs, settings }: { getRecogn
   /** 読み取りの中止用。読み取り中だけ入っている */
   const abortRef = useRef<AbortController | null>(null);
 
-  const read = async (image: Blob, source: CaptureSource, regions?: Record<GuideKey, Blob>) => {
+  const read = async (image: Blob, source: CaptureSource, regions?: Record<GuideKey, Blob>, frames?: Record<GuideKey, Rect>) => {
     setBusy(true);
     setStage("画像を準備しています");
     setSong(null);
@@ -38,8 +60,20 @@ export function useCaptureReader({ getRecognizer, songs, settings }: { getRecogn
     let cancelled = false;
     let raw = null;
     let ocr: OcrTrace | undefined;
+    let extraCrops: Partial<Record<PanelRegion, Blob>> | undefined;
+    let optionPixels: ImageData | null = null;
     try {
       const full = await createImageBitmap(image);
+      // パネルの中のほかの欄（使用オプション・FAST/SLOW・ミスカウント）。枠の位置から求め、画像を閉じる前に切り出しておく
+      if (frames) {
+        const at = panelRegions(frames, full);
+        extraCrops = {};
+        for (const k of Object.keys(at) as PanelRegion[]) {
+          const r = at[k];
+          if (r) extraCrops[k] = await cropBlob(full, r);
+        }
+        if (at.useOption) optionPixels = cropPixels(full, at.useOption, 700);
+      }
       const crops = regions
         ? ({
             score: await createImageBitmap(regions.score),
@@ -84,11 +118,21 @@ export function useCaptureReader({ getRecognizer, songs, settings }: { getRecogn
       image,
       source,
       regions,
+      extraCrops,
       ocr,
       raw,
       resolution: raw ? resolveResult(raw, songs) : null,
     };
     setDraft(next);
+    // 使用オプションは、結果を出したあとで読む（読み取りの待ち時間を増やさない）。読めたら結果に足す
+    const engine = getEngine();
+    if (optionPixels && engine && raw) {
+      void readUseOption(optionPixels, engine)
+        .then((useOption) => {
+          if (useOption) setDraft((d) => (d && d.id === next.id && d.raw ? { ...d, raw: { ...d.raw, useOption } } : d));
+        })
+        .catch(() => undefined);
+    }
     // 確定を待たず、読み取りが終わった時点で学習サンプルとして貯めて送る（成功・失敗を問わない）
     void collectReadSample(next, settings)
       .then((saved) => (saved ? flushIfEnabled(settings) : null))

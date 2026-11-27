@@ -31,7 +31,7 @@ export default function App() {
   const { songs } = useMaster();
   // セットアップ中も、OCR のモデルを読み込んでおく（処理を決めるベンチマークの前は、まだ作らない）
   const { getRecognizer, getEngine, backend } = useOcrEngine(songs, settings.ocrBackend, settings.onboarded || settings.ocrBackend !== null);
-  const reader = useCaptureReader({ getRecognizer, songs, settings });
+  const reader = useCaptureReader({ getRecognizer, getEngine, songs, settings });
   const install = useInstallPrompt(settings.onboarded);
   const [tab, setTab] = useState<Tab>("camera");
   // 取り込んだ画像。枠を合わせている間だけ入っている（合わせたら、撮影と同じく枠の中を読む）
@@ -89,9 +89,9 @@ export default function App() {
           getEngine={getEngine}
           songs={songs}
           onCancel={() => setImporting(null)}
-          onConfirm={(regions) => {
+          onConfirm={(regions, frames) => {
             setImporting(null);
-            void reader.read(importing, "import", regions);
+            void reader.read(importing, "import", regions, frames);
           }}
         />
       )}
