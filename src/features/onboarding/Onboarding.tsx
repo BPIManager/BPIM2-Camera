@@ -14,7 +14,7 @@ interface Props {
 
 const STEP_COUNT = 8;
 
-/** 初回起動のセットアップ。同意 → サインイン → カメラ選択 → キャリブレーション → 使い方 → 読み取りの最適化 → オプション → 改善への協力 */
+/** 初回起動のセットアップ。同意 → サインイン → カメラ選択 → キャリブレーション → 使い方 → 読み取りの準備 → オプション → 改善への協力 */
 export default function Onboarding({ settings, update, viewSize }: Props) {
   const step = Math.min(Math.max(settings.onboardStep, 0), STEP_COUNT - 1);
   const go = (n: number) => update({ onboardStep: n });

@@ -48,6 +48,17 @@ export const MODEL_FALLBACK: Record<ModelSet, ModelFiles> = {
   },
 };
 
+/** 使うモデルの取得先。自前のモデルが置かれていなければ（開発中など）、外部から取得する */
+export async function resolveModelFiles(set: ModelSet): Promise<ModelFiles> {
+  try {
+    const res = await fetch(MODEL_FILES[set].detection, { method: "HEAD" });
+    if (res.ok && !(res.headers.get("content-type") ?? "").includes("text/html")) return MODEL_FILES[set];
+  } catch {
+    /* 取得できなければ外部から */
+  }
+  return MODEL_FALLBACK[set];
+}
+
 /** onnxruntime-web のランタイム（WASM）。CPU 用は CPU だけの版、GPU 用は WebGPU も使える版 */
 export const RUNTIME_URL: Record<OcrBackend, string> = { cpu: cpuRuntime, gpu: gpuRuntime };
 

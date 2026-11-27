@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import * as ort from "onnxruntime-web";
 import { PaddleOcrService } from "ppu-paddle-ocr/web";
-import { MODEL_FALLBACK, MODEL_FILES, type ModelFiles, type ModelSet } from "../assets";
+import { resolveModelFiles, type ModelFiles, type ModelSet } from "../assets";
 import { loadAsset, type AssetProgress } from "../assetStore";
 import type { OcrImage, OcrLine } from "./engine";
 import { hasWebGpu } from "./webgpu";
@@ -48,16 +48,6 @@ function toCanvas(image: ImageData): OffscreenCanvas {
   return c;
 }
 
-/** 自前のモデルが置かれているか（開発中など、置かれていなければ外部から取得する） */
-async function hasLocalModels(files: ModelFiles): Promise<boolean> {
-  try {
-    const res = await fetch(files.detection, { method: "HEAD" });
-    return res.ok && !(res.headers.get("content-type") ?? "").includes("text/html");
-  } catch {
-    return false;
-  }
-}
-
 /**
  * OCR を動かす Worker の本体。ランタイム（WASM）の URL だけ違えて、CPU 用・GPU 用の Worker で共用する。
  * ランタイムとモデルは、アプリのキャッシュから読み、なければ取得する（取得の進み具合をページに知らせる）
@@ -70,7 +60,7 @@ export function startOcrWorker(runtimeUrl: string) {
   function ensure(): Promise<PaddleOcrService> {
     ready ??= (async () => {
       const set = config.models ?? "small";
-      const urls = { ...((await hasLocalModels(MODEL_FILES[set])) ? MODEL_FILES[set] : MODEL_FALLBACK[set]), ...config.modelUrls };
+      const urls = { ...(await resolveModelFiles(set)), ...config.modelUrls };
       // ランタイムとモデルを、キャッシュから（なければ取得して）読む
       const [wasm, detection, recognition, charactersDictionary] = await Promise.all([runtimeUrl, urls.detection, urls.recognition, urls.charactersDictionary].map((u) => loadAsset(u, report)));
       ort.env.wasm.wasmBinary = wasm;
