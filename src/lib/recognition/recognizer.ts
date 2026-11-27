@@ -12,6 +12,23 @@ export interface OcrTrace {
   /** 認識の結果（曲名・譜面・EX など）。読めなければ null */
   result: unknown;
   ms: number;
+  /** 読み取りの各段階。どの段階で曲・EX が確定したか（`resolvedAt`）と、段階ごとの経過を残す */
+  steps: OcrStep[];
+  resolvedAt: { song: string | null; ex: string | null };
+}
+
+/** 読み取りの 1 段階（1 回の OCR）。この段階が終わった時点の状態 */
+export interface OcrStep {
+  /** 段階の名前（例: title:gray1200・title:deskew:raw900・score:cyanFill700・judge:1200） */
+  step: string;
+  /** この段階で読んだ行の数（行は title・score・judge の配列に、読んだ順に並ぶ） */
+  lines: number;
+  /** この段階が終わった時点の経過時間（ms） */
+  ms: number;
+  /** この時点で曲が確定していたら、その曲名 */
+  song: string | null;
+  /** この時点で EX が確定していたら、その値 */
+  ex: number | null;
 }
 
 export interface RecognizeInput {

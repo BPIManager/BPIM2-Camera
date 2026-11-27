@@ -4,6 +4,8 @@ export interface OcrLine {
   /** 0〜100 */
   confidence: number;
   box: { x: number; y: number; width: number; height: number };
+  /** 読んだ画像の大きさ（画素）。記録で位置を 0〜1 の割合にするために、認識器が付ける（エンジンは付けない） */
+  size?: { width: number; height: number };
 }
 
 /**

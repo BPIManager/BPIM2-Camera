@@ -3,7 +3,7 @@ import type { SongMasterEntry } from "@/lib/songs/types";
 import { isolateDigitRow } from "../ocr/isolate";
 import { maskVariant, type Variant } from "../ocr/preprocess";
 import { logOcr, toTrace } from "@/lib/debug/ocrLog";
-import type { Recognizer, RecognizeInput } from "../recognizer";
+import type { OcrStep, OcrTrace, Recognizer, RecognizeInput } from "../recognizer";
 import type { OcrEngine, OcrLine } from "./engine";
 import { resolveResult } from "../resolve";
 import { rawFromPaddle } from "./fromPaddle";
@@ -52,6 +52,13 @@ export class PaddleRecognizer implements Recognizer {
     private readonly fallback?: Recognizer,
   ) {}
 
+  /** 画像を符号化して読む。読んだ画像の大きさを行に付ける（記録で位置を割合にするため） */
+  private async read(bitmap: ImageBitmap, width: number, mask: Variant | null = null, isolate = false): Promise<OcrLine[]> {
+    const height = Math.max(1, Math.round((bitmap.height * width) / bitmap.width));
+    const lines = await this.engine.readLines(await encode(bitmap, width, mask, isolate));
+    return lines.map((l) => ({ ...l, size: { width, height } }));
+  }
+
   async recognize(input: RecognizeInput): Promise<RawResult | null> {
     if (!input.regions) {
       input.onStage?.("画像全体を読んでいます");
@@ -74,16 +81,30 @@ export class PaddleRecognizer implements Recognizer {
       }
       return true;
     };
-    stage("曲名と難易度を読んでいます");
     const t0 = performance.now();
-    const title: OcrLine[] = await this.engine.readLines(await encode(r.title, TITLE_PASSES[0].width, TITLE_PASSES[0].mask));
+    const steps: OcrStep[] = [];
+    const resolvedAt: OcrTrace["resolvedAt"] = { song: null, ex: null };
+    // 1 段階が終わるたびに、その時点で曲・EX が確定しているかを記録する（最初に確定した段階が resolvedAt）
+    const mark = (step: string, lines: number, candidate: RawResult | null) => {
+      const song = candidate ? resolveResult(candidate, this.getMaster()).chart?.title ?? null : null;
+      const ex = candidate?.exScore.value ?? null;
+      steps.push({ step, lines, ms: Math.round(performance.now() - t0), song, ex });
+      resolvedAt.song ??= song ? step : null;
+      resolvedAt.ex ??= ex !== null ? step : null;
+    };
+    stage("曲名と難易度を読んでいます");
+    const title: OcrLine[] = await this.read(r.title, TITLE_PASSES[0].width, TITLE_PASSES[0].mask);
     // 難易度も曲名も取れなければ、元の画像でも曲名の枠を読み直す
     const first = rawFromPaddle({ title, score: [], judge: [] }, this.getMaster());
     let resolved = announceIfResolved(first);
+    mark("title:gray1200", title.length, first);
     if (!resolved && (!first || first.difficulty === null || first.titleText === null)) {
       stage("曲名をもう一度読んでいます");
-      title.push(...(await this.engine.readLines(await encode(r.title, TITLE_PASSES[1].width, TITLE_PASSES[1].mask))));
-      resolved = announceIfResolved(rawFromPaddle({ title, score: [], judge: [] }, this.getMaster()));
+      const n = title.length;
+      title.push(...(await this.read(r.title, TITLE_PASSES[1].width, TITLE_PASSES[1].mask)));
+      const cand = rawFromPaddle({ title, score: [], judge: [] }, this.getMaster());
+      resolved = announceIfResolved(cand);
+      mark("title:raw900", title.length - n, cand);
     }
     // それでも決まらなければ、写真が斜めかもしれない。文字の行の傾きを推定して水平に直し、もう一度読む
     // （斜めの文字は検出されにくい。決まらなかったときだけなので、ふだんは遅くならず、読めていたものを悪化させない）
@@ -91,11 +112,17 @@ export class PaddleRecognizer implements Recognizer {
       const level = await deskewBitmap(r.title);
       if (level) {
         stage("傾きを直して曲名を読んでいます");
-        title.push(...(await this.engine.readLines(await encode(level.bitmap, TITLE_PASSES[0].width, TITLE_PASSES[0].mask))));
-        resolved = announceIfResolved(rawFromPaddle({ title, score: [], judge: [] }, this.getMaster()));
+        let n = title.length;
+        title.push(...(await this.read(level.bitmap, TITLE_PASSES[0].width, TITLE_PASSES[0].mask)));
+        let cand = rawFromPaddle({ title, score: [], judge: [] }, this.getMaster());
+        resolved = announceIfResolved(cand);
+        mark("title:deskew:gray1200", title.length - n, cand);
         if (!resolved) {
-          title.push(...(await this.engine.readLines(await encode(level.bitmap, TITLE_PASSES[1].width, TITLE_PASSES[1].mask))));
-          resolved = announceIfResolved(rawFromPaddle({ title, score: [], judge: [] }, this.getMaster()));
+          n = title.length;
+          title.push(...(await this.read(level.bitmap, TITLE_PASSES[1].width, TITLE_PASSES[1].mask)));
+          cand = rawFromPaddle({ title, score: [], judge: [] }, this.getMaster());
+          resolved = announceIfResolved(cand);
+          mark("title:deskew:raw900", title.length - n, cand);
         }
         level.bitmap.close();
       }
@@ -103,24 +130,27 @@ export class PaddleRecognizer implements Recognizer {
     // 曲名の読み取りを尽くしても確定できない。ここで知らせる（判定やスコアの手がかりで、あとから確定することもある）
     if (!resolved) input.onSong?.({ kind: "unresolved" });
     stage("判定の内訳を読んでいます");
-    const judge: OcrLine[][] = [await this.engine.readLines(await encode(r.judge, JUDGE_WIDTHS[0]))];
+    const judge: OcrLine[][] = [await this.read(r.judge, JUDGE_WIDTHS[0])];
+    mark(`judge:${JUDGE_WIDTHS[0]}`, judge[0]!.length, rawFromPaddle({ title, score: [], judge }, this.getMaster()));
     const score: OcrLine[][] = [];
     const scoreGroups: ("color" | "raw")[] = [];
     let raw: RawResult | null = null;
     for (const [i, pass] of SCORE_PASSES.entries()) {
       stage(i === 0 ? "EXスコアを読んでいます" : `EXスコアを読み直しています（${i + 1}/${SCORE_PASSES.length}）`);
-      score.push(await this.engine.readLines(await encode(r.score, pass.width, pass.mask, pass.isolate)));
+      score.push(await this.read(r.score, pass.width, pass.mask, pass.isolate));
       scoreGroups.push(pass.mask ? "color" : "raw");
       raw = rawFromPaddle({ title, score, scoreGroups, judge }, this.getMaster());
       announceIfResolved(raw);
+      mark(`score:${pass.mask ?? "raw"}${pass.isolate ? "-isolate" : ""}${pass.width}`, score[score.length - 1]!.length, raw);
       if (raw?.exScore.value != null) break;
     }
     for (const w of JUDGE_WIDTHS.slice(1)) {
       if (raw?.exScore.value != null) break;
       stage("判定の数字からスコアを確かめています");
-      judge.push(await this.engine.readLines(await encode(r.judge, w)));
+      judge.push(await this.read(r.judge, w));
       raw = rawFromPaddle({ title, score, scoreGroups, judge }, this.getMaster());
       announceIfResolved(raw);
+      mark(`judge:${w}`, judge[judge.length - 1]!.length, raw);
     }
     const entry = {
       title,
@@ -128,6 +158,8 @@ export class PaddleRecognizer implements Recognizer {
       judge: judge.flat(),
       result: raw && { title: raw.titleText, notes: raw.notes, difficulty: raw.difficulty, level: raw.level, ex: raw.exScore.value, judge: raw.judge },
       ms: performance.now() - t0,
+      steps,
+      resolvedAt,
     };
     logOcr(entry);
     input.onTrace?.(toTrace(entry));

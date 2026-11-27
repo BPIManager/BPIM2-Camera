@@ -77,7 +77,7 @@ Upload (`src/lib/training/upload.ts`): when consent is given and `VITE_STATS_UPL
 samples/<deviceId>/<sampleId>/{score.jpg, title.jpg, judge.jpg, labels.json}
 ```
 
-`labels.json` includes the OCR trace.
+`labels.json` includes the OCR trace (`ocr`): every line read, as `text(confidence)[x,y,w,h]` where the box is a 0–1 ratio of the image that was read (the crop; for deskewed title passes, the rotated image); `steps`, one entry per OCR pass (`title:gray1200`, `title:raw900`, `title:deskew:gray1200`, `title:deskew:raw900`, `judge:<width>`, `score:<mask><width>`) with the line count, elapsed ms, and the song / EX known after that pass; and `resolvedAt`, the first pass at which the song and the EX score were determined.
 
 ### Upload Worker (`worker/`)
 

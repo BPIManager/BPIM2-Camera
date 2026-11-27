@@ -50,7 +50,7 @@ describe("buildTrainingZip", () => {
 
 describe("OCR の読み取りの記録", () => {
   it("あれば labels.json に入れ、なければ入れない", async () => {
-    const ocr = { title: ["Verflucht(99)"], score: [["2401(90)"]], judge: [], result: { ex: 4234 }, ms: 812 };
+    const ocr = { title: ["Verflucht(99)"], score: [["2401(90)"]], judge: [], result: { ex: 4234 }, ms: 812, steps: [{ step: "title:gray1200", lines: 1, ms: 300, song: "Verflucht", ex: null }], resolvedAt: { song: "title:gray1200", ex: null } };
     const { labels } = await buildTrainingZip([sample("s1", { ocr }), sample("s2")]);
     expect(labels[0].ocr).toEqual(ocr);
     expect(labels[1].ocr).toBeUndefined();

@@ -8,6 +8,8 @@ export interface OcrDebugEntry {
   /** 認識の結果（曲名・譜面・EX など）。読めなければ null */
   result: unknown;
   ms: number;
+  steps: OcrTrace["steps"];
+  resolvedAt: OcrTrace["resolvedAt"];
 }
 
 /** 設定画面のデバッグモード。オンの間だけ、読み取り結果を貯めて画面で見られるようにする（本番ビルドでも使える） */
@@ -36,10 +38,20 @@ export const clearDebugRecords = (): void => {
   emit();
 };
 
-const fmt = (lines: readonly OcrLine[]) => lines.map((l) => `${l.text}(${Math.round(l.confidence)})`);
+/**
+ * 行の記録。`文字(確度)[x,y,幅,高さ]`。位置は、読んだ画像に対する 0〜1 の割合（切り出した枠の中での位置。
+ * 傾きを直して読んだ曲名は、回転後の画像での位置）。読んだ画像の大きさが分からない行は、位置を付けない
+ */
+const ratio = (n: number, d: number) => Math.round((n / d) * 1000) / 1000;
+const fmt = (lines: readonly OcrLine[]) =>
+  lines.map((l) => {
+    const base = `${l.text}(${Math.round(l.confidence)})`;
+    const { size: s, box: b } = l;
+    return s ? `${base}[${ratio(b.x, s.width)},${ratio(b.y, s.height)},${ratio(b.width, s.width)},${ratio(b.height, s.height)}]` : base;
+  });
 
 /** 読み取った行を、記録（文字と確度の文字列）にする */
-export const toTrace = (e: OcrDebugEntry): OcrTrace => ({ title: fmt(e.title), score: e.score.map(fmt), judge: fmt(e.judge), result: e.result, ms: Math.round(e.ms) });
+export const toTrace = (e: OcrDebugEntry): OcrTrace => ({ title: fmt(e.title), score: e.score.map(fmt), judge: fmt(e.judge), result: e.result, ms: Math.round(e.ms), steps: e.steps, resolvedAt: e.resolvedAt });
 
 const texts = (lines: readonly OcrLine[]) => lines.map((l) => `${l.text}(${Math.round(l.confidence)})`).join(" | ");
 
