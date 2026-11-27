@@ -28,16 +28,28 @@ const LAYOUT_1P: GuideLayout = {
   judge: { x: 0.32, y: 0.565, width: 0.15, height: 0.085 },
 };
 
-const mirrorRect = (r: NormRect): NormRect => ({ ...r, x: 1 - r.x - r.width });
+/**
+ * 1P と 2P の配置の差。2P のリザルト画面では、パネル（スコア欄・判定表）がまとまりのまま右へ動き、曲名は左下へ動く（左右反転ではない）。
+ * 2P の写真（全体を撮ったもの 3 枚）から、パネルと曲名の位置関係を測り、1P の既定の配置の縮尺に当てはめた暫定値（縦長の 2P の写真で確かめる）
+ */
+const SIDE_SHIFT = { panelX: 0.29, titleX: -0.59, titleY: 0.14 };
 
-export function mirrorLayout(l: GuideLayout): GuideLayout {
-  return { score: mirrorRect(l.score), title: mirrorRect(l.title), judge: mirrorRect(l.judge) };
+const shiftRect = (r: NormRect, dx: number, dy = 0): NormRect => ({ ...r, x: r.x + dx, y: r.y + dy });
+
+/** 配置を、もう一方の側（1P ↔ 2P）の配置にする */
+export function toOtherSide(l: GuideLayout, from: PlaySide): GuideLayout {
+  const k = from === "1P" ? 1 : -1;
+  return {
+    score: shiftRect(l.score, k * SIDE_SHIFT.panelX),
+    judge: shiftRect(l.judge, k * SIDE_SHIFT.panelX),
+    title: shiftRect(l.title, k * SIDE_SHIFT.titleX, k * SIDE_SHIFT.titleY),
+  };
 }
 
-/** 2P はリザルト画面の左右が反転するので、1P の配置を左右反転する */
+/** 2P は、1P の配置からパネルを右へ、曲名を左下へ動かす */
 export const GUIDE_LAYOUTS: Record<PlaySide, GuideLayout> = {
   "1P": LAYOUT_1P,
-  "2P": mirrorLayout(LAYOUT_1P),
+  "2P": toOtherSide(LAYOUT_1P, "1P"),
 };
 
 /** 保存されたキャリブレーション結果（旧版の 1P/2P 別の保存値。移行にだけ使う） */
@@ -49,15 +61,15 @@ export function migrateLegacyLayout(side: PlaySide, custom: CustomGuides | undef
   const own = custom?.[side];
   if (own) return { ...GUIDE_LAYOUTS[side], ...own };
   const other = custom?.[otherSide];
-  return other ? mirrorLayout({ ...GUIDE_LAYOUTS[otherSide], ...other }) : null;
+  return other ? toOtherSide({ ...GUIDE_LAYOUTS[otherSide], ...other }, otherSide) : null;
 }
 
-/** 使う配置。キャリブレーション済みならそれ、なければ既定値（1P） */
-export function resolveLayout(custom: GuideLayout | null | undefined): GuideLayout {
-  return custom ?? GUIDE_LAYOUTS["1P"];
+/** 使う配置。キャリブレーション済みならそれ、なければ側（既定は 1P）の既定値 */
+export function resolveLayout(custom: GuideLayout | null | undefined, side: PlaySide = "1P"): GuideLayout {
+  return custom ?? GUIDE_LAYOUTS[side];
 }
 
-/** スコア枠が画面の左右どちらにあるかから、プレーサイドを推定する（学習サンプルのメタ情報用） */
+/** スコア枠が画面の左右どちらにあるかから、プレーサイドを推定する（設定が「自動」のとき） */
 export function inferSide(layout: GuideLayout): PlaySide {
   return layout.score.x + layout.score.width / 2 < 0.5 ? "1P" : "2P";
 }

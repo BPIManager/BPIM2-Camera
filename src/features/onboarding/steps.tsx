@@ -16,9 +16,10 @@ import { useBpim2Profile } from "@/hooks/useBpim2Profile";
 import { signOutUser } from "@/lib/firebase/auth";
 import { emailLinkErrorMessage } from "@/lib/firebase/email";
 import { PRIVACY_URL, TERMS_URL } from "@/lib/links";
-import type { Settings } from "@/lib/storage/settings";
+import { resolvePlaySide, type Settings } from "@/lib/storage/settings";
 import type { Size } from "@/lib/vision/framing";
-import { resolveLayout, type GuideLayout } from "@/lib/vision/guides";
+import { GUIDE_LAYOUTS, inferSide, resolveLayout, type GuideLayout } from "@/lib/vision/guides";
+import PlaySidePicker from "@/components/play-side-picker";
 
 function Frame({
   title,
@@ -215,6 +216,10 @@ export function CalibrateStep({
       }
     >
       <CalibrateAnimation />
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium">プレーサイド</p>
+        <PlaySidePicker value={settings.playSide} inferred={settings.layout ? inferSide(settings.layout) : "1P"} onChange={(playSide) => update({ playSide })} />
+      </div>
       <Alert variant="info">
         <Info />
         <AlertTitle>撮影画面でも調整できます</AlertTitle>
@@ -234,7 +239,8 @@ export function CalibrateStep({
           closeLabel="戻る"
           saveLabel="この位置で決定"
           requireImage
-          initial={resolveLayout(settings.layout)}
+          initial={resolveLayout(settings.layout, resolvePlaySide(settings))}
+          defaultLayout={GUIDE_LAYOUTS[resolvePlaySide(settings)]}
           initialAspect={settings.layoutAspect}
           viewSize={viewSize}
           onClose={() => setEditing(false)}
@@ -281,7 +287,7 @@ export function HowToStep({
   settings: Settings;
   onNext: () => void;
 }) {
-  const layout = resolveLayout(settings.layout);
+  const layout = resolveLayout(settings.layout, resolvePlaySide(settings));
   return (
     <Frame
       title="撮影のしかた"

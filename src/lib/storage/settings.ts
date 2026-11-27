@@ -2,7 +2,7 @@ import { DEFAULT_SYNC_TARGET, isSyncTarget, type SyncTarget } from "@/lib/bpi/sy
 import type { OcrBenchmarkResult } from "@/lib/recognition/benchmark";
 import type { OcrBackend } from "@/lib/recognition/ocrSetup";
 import { isValidRect } from "@/lib/vision/guideEdit";
-import { GUIDE_KEYS, migrateLegacyLayout, type CustomGuides, type GuideLayout, type NormRect } from "@/lib/vision/guides";
+import { GUIDE_KEYS, inferSide, migrateLegacyLayout, type CustomGuides, type GuideLayout, type NormRect } from "@/lib/vision/guides";
 
 export type PlaySide = "1P" | "2P";
 
@@ -33,6 +33,8 @@ export interface Settings {
   ocrBackend: OcrBackend | null;
   /** 最後に行ったベンチマークの結果 */
   ocrBenchmark: OcrBenchmarkResult | null;
+  /** プレーサイド。auto は、枠の配置（スコア欄の枠が左右どちらか）から推定する */
+  playSide: PlaySide | "auto";
 }
 
 const KEY = "bpim2-camera:settings";
@@ -56,6 +58,7 @@ export function defaultSettings(): Settings {
     onboardStep: 0,
     ocrBackend: null,
     ocrBenchmark: null,
+    playSide: "auto",
   };
 }
 
@@ -65,13 +68,14 @@ export function loadSettings(storage: Pick<Storage, "getItem" | "setItem"> = loc
     if (raw) {
       const stored = JSON.parse(raw) as Partial<Settings> & { playSide?: PlaySide; guides?: unknown };
       const { playSide, guides, ...rest } = stored;
+      // 旧版のプレーサイド（1P・2P）は、新しい設定にそのまま引き継ぐ
       const parsed = { ...defaultSettings(), ...rest };
       // 旧版はプレーサイドと 1P/2P 別の枠を持っていた。新しい layout がなければそこから移す
       const layout = sanitizeLayout(parsed.layout) ?? migrateLegacyLayout(playSide === "2P" ? "2P" : "1P", sanitizeGuides(guides));
       const aspect = typeof parsed.layoutAspect === "number" && parsed.layoutAspect > 0.2 && parsed.layoutAspect < 5 ? parsed.layoutAspect : null;
       // 縦横比が分からない枠は、旧来どおり表示領域全体への割合として扱う
       // 壊れた値は既定に戻す
-      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET, cameraId: typeof parsed.cameraId === "string" && parsed.cameraId ? parsed.cameraId : null, ocrBackend: parsed.ocrBackend === "gpu" || parsed.ocrBackend === "cpu" ? parsed.ocrBackend : null };
+      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET, cameraId: typeof parsed.cameraId === "string" && parsed.cameraId ? parsed.cameraId : null, ocrBackend: parsed.ocrBackend === "gpu" || parsed.ocrBackend === "cpu" ? parsed.ocrBackend : null, playSide: playSide === "1P" || playSide === "2P" ? playSide : "auto" };
     }
   } catch {
     /* 壊れた値や private モードでは既定値で動かす */
@@ -87,6 +91,12 @@ export function saveSettings(s: Settings, storage: Pick<Storage, "getItem" | "se
   } catch {
     /* 保存できなくてもセッション内では動く */
   }
+}
+
+/** 使うプレーサイド。設定が自動なら、枠の配置から推定する（キャリブレーション前は 1P） */
+export function resolvePlaySide(s: Pick<Settings, "playSide" | "layout">): PlaySide {
+  if (s.playSide !== "auto") return s.playSide;
+  return s.layout ? inferSide(s.layout) : "1P";
 }
 
 /** 3 枠すべてが有効なときだけ採用する。壊れていれば null（既定値に戻す） */

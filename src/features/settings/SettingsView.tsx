@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import Button from "@/components/ui/button";
 import type { Size } from "@/lib/vision/framing";
-import { resolveLayout } from "@/lib/vision/guides";
+import { GUIDE_LAYOUTS, inferSide, resolveLayout } from "@/lib/vision/guides";
+import PlaySidePicker from "@/components/play-side-picker";
 import AccountSection from "./AccountSection";
 import CameraPicker from "@/components/camera-picker";
 import DebugSection from "./DebugSection";
@@ -17,7 +18,7 @@ import Switch from "@/components/ui/switch";
 import { clearHistory } from "@/lib/storage/history";
 import { clearSamples, countPendingSamples, countSamples, listSamples } from "@/lib/storage/samples";
 import { buildTrainingZip } from "@/lib/training/exportZip";
-import type { Settings } from "@/lib/storage/settings";
+import { resolvePlaySide, type Settings } from "@/lib/storage/settings";
 
 interface Props {
   settings: Settings;
@@ -76,7 +77,8 @@ export default function SettingsView({ settings, update, viewSize, installable, 
       </div>
       {editingGuides && (
         <GuideEditor
-          initial={resolveLayout(settings.layout)}
+          initial={resolveLayout(settings.layout, resolvePlaySide(settings))}
+          defaultLayout={GUIDE_LAYOUTS[resolvePlaySide(settings)]}
           initialAspect={settings.layoutAspect}
           viewSize={viewSize}
           onClose={() => setEditingGuides(false)}
@@ -86,6 +88,11 @@ export default function SettingsView({ settings, update, viewSize, installable, 
           }}
         />
       )}
+      <div className="flex flex-col gap-2 border-b border-border py-3">
+        <Label>プレーサイド</Label>
+        <p className="text-xs text-muted-foreground">2P のリザルト画面は、スコア・判定の欄が右、曲名が左下になります。自動は、撮影枠の位置から判断します</p>
+        <PlaySidePicker value={settings.playSide} inferred={settings.layout ? inferSide(settings.layout) : "1P"} onChange={(playSide) => update({ playSide })} />
+      </div>
       <div className="flex flex-col gap-2 border-b border-border py-3">
         <Label>BPIM2 の同期先（既定）</Label>
         <p className="text-xs text-muted-foreground">結果画面の「BPIM2同期」で保存する先です。結果画面では、1 件ごとに変えられます</p>

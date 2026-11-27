@@ -66,12 +66,23 @@ describe("settings のキャリブレーション", () => {
     const s = loadSettings(mem({ playSide: "2P", guides: { "2P": { score: ok, title: ok } } }));
     expect(s.layout?.score).toEqual(ok);
     expect(s.layout?.title).toEqual(ok);
-    expect(s).not.toHaveProperty("playSide");
+    // 旧版のプレーサイドは、新しいプレーサイドの設定に引き継ぐ
+    expect(s.playSide).toBe("2P");
     expect(s).not.toHaveProperty("guides");
   });
 
   it("旧版で壊れた枠だけは捨てて既定値で補う", () => {
     const s = loadSettings(mem({ guides: { "1P": { score: ok, judge: { x: 2, y: 0, width: 1, height: 1 } } } }));
     expect(s.layout?.score).toEqual(ok);
+  });
+});
+
+describe("resolvePlaySide", () => {
+  it("設定があればそれ。自動なら枠の配置から推定し、キャリブレーション前は 1P", async () => {
+    const { resolvePlaySide } = await import("@/lib/storage/settings");
+    const { GUIDE_LAYOUTS } = await import("@/lib/vision/guides");
+    expect(resolvePlaySide({ playSide: "2P", layout: null })).toBe("2P");
+    expect(resolvePlaySide({ playSide: "auto", layout: null })).toBe("1P");
+    expect(resolvePlaySide({ playSide: "auto", layout: GUIDE_LAYOUTS["2P"] })).toBe("2P");
   });
 });

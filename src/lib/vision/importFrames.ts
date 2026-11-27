@@ -2,7 +2,7 @@ import type { OcrEngine } from "@/lib/recognition/paddle/engine";
 import { matchChart } from "@/lib/songs/matcher";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import { findAnchors, fitFrames, type FrameFit } from "./autoFrame";
-import { CANONICAL_LAYOUT } from "./autoFrameCanon";
+import { CANONICAL_LAYOUT, CANONICAL_LAYOUT_2P } from "./autoFrameCanon";
 import { GUIDE_KEYS, type GuideKey, type GuideLayout } from "./guides";
 
 /** 枠の自動推定で画像全体を読むときの長辺（画素）。大きいほど小さい文字を拾えるが、遅い */
@@ -11,7 +11,7 @@ const SCAN_SIDE = 1280;
 /**
  * 取り込んだ画像の全体を 1 回 OCR して、撮影枠（スコア・曲名・判定）の位置を推定する。推定できなければ null
  */
-export async function detectFrames(image: ImageBitmap, engine: OcrEngine, master: readonly SongMasterEntry[]): Promise<FrameFit | null> {
+export async function detectFrames(image: ImageBitmap, engine: OcrEngine, master: readonly SongMasterEntry[], side: "1P" | "2P" | "auto" = "auto"): Promise<(FrameFit & { side: "1P" | "2P" }) | null> {
   const scale = Math.min(1, SCAN_SIDE / Math.max(image.width, image.height));
   const width = Math.max(1, Math.round(image.width * scale));
   const height = Math.max(1, Math.round(image.height * scale));
@@ -21,7 +21,14 @@ export async function detectFrames(image: ImageBitmap, engine: OcrEngine, master
   const lines = await engine.readLines(ctx.getImageData(0, 0, width, height));
   // 曲名の行も手がかりにする（曲データの曲名と照らし合わせて見つける）
   const titleScore = (text: string) => matchChart(master, { playStyle: "SP", difficulty: null, level: null, notes: null, titleText: text }).candidates[0]?.score ?? 0;
-  return fitFrames(findAnchors(lines, { width, height }, titleScore), CANONICAL_LAYOUT, { width, height }, 2);
+  const anchors = findAnchors(lines, { width, height }, titleScore);
+  // 1P・2P の基準で当てはめる。パネルの手がかりはどちらでも合い、曲名まわりの手がかりは合うほうでだけ使われるので、使えた手がかりの多いほうを採る。
+  // 同じなら（曲名まわりが読めなかったなど）1P。プレーサイドを設定で決めていれば、その側だけ
+  const fits = (side === "auto" ? (["1P", "2P"] as const) : [side]).map((s) => {
+    const fit = fitFrames(anchors, s === "1P" ? CANONICAL_LAYOUT : CANONICAL_LAYOUT_2P, { width, height }, 2);
+    return fit ? { ...fit, side: s } : null;
+  });
+  return fits.reduce<(FrameFit & { side: "1P" | "2P" }) | null>((best, f) => (f && (!best || f.used > best.used) ? f : best), null);
 }
 
 /** 枠（画像に対する割合）を、画像の画素の位置にする */

@@ -85,3 +85,12 @@ export const CANONICAL_LAYOUT: CanonicalLayout = {
     }
   }
 };
+
+/**
+ * 2P の基準。2P では、パネル（スコア欄・判定表など）はまとまりのまま右へ動き、曲名・難易度・ノーツ数は左下へ動く。
+ * パネルの手がかりは 1P と同じにし、曲名まわりの手がかりと曲名の枠だけを差し替える（2P の写真 3 枚から求めた。pnpm eval canon2p）
+ */
+export const CANONICAL_LAYOUT_2P: CanonicalLayout = {
+  anchors: { ...CANONICAL_LAYOUT.anchors, difficulty: { x: -326, y: 1431 }, notes: { x: 13, y: 1351 }, songTitle: { x: -120, y: 1329 } },
+  frames: { ...CANONICAL_LAYOUT.frames, title: { x: -388, y: 1265, width: 437, height: 144 } },
+};
