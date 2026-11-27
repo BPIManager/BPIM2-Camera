@@ -1,0 +1,46 @@
+import { TesseractRecognizer } from "./ocr/tesseractRecognizer";
+import { EnginePool } from "./paddle/enginePool";
+import { PaddleRecognizer } from "./paddle/paddleRecognizer";
+import { WorkerOcrEngine } from "./paddle/workerEngine";
+import type { Recognizer } from "./recognizer";
+import type { SongMasterEntry } from "@/lib/songs/types";
+
+/** 読み取りの処理。gpu は WebGPU、cpu は WASM（マルチスレッド） */
+export type OcrBackend = "gpu" | "cpu";
+
+export interface OcrSetup {
+  backend: OcrBackend;
+  recognizer: Recognizer;
+  /** モデルの読み込みを済ませておく。実際に使っている処理を返す（GPU を頼んでも、使えなければ CPU になる） */
+  warmUp(): Promise<OcrBackend>;
+  /** Worker を止めて、メモリを返す */
+  dispose(): void;
+}
+
+/**
+ * 処理の種類に合わせて、Worker と認識器を用意する。
+ * - gpu: Worker 1 つ（GPU は 1 回ずつしか読めないので、分けても速くならない）
+ * - cpu: 曲名と、スコア欄・判定表を、別々の Worker で同時に読む（実機で約 25% 速い）。スコア欄・判定表は先読みし、要らなくなった分は取り消す
+ */
+export function createOcrSetup(backend: OcrBackend, getMaster: () => readonly SongMasterEntry[]): OcrSetup {
+  const ep = backend === "gpu" ? "webgpu" : "wasm";
+  const titleWorker = new WorkerOcrEngine(undefined, { ep });
+  const passWorker = backend === "cpu" ? new WorkerOcrEngine(undefined, { ep }) : undefined;
+  const workers = passWorker ? [titleWorker, passWorker] : [titleWorker];
+  // 枠で撮った画像は PaddleOCR、全体画像の取り込みは Tesseract で読む
+  const recognizer = new PaddleRecognizer(titleWorker, getMaster, new TesseractRecognizer(getMaster), {
+    passEngine: passWorker && new EnginePool([passWorker]),
+    ahead: passWorker ? Number.POSITIVE_INFINITY : 0,
+  });
+  return {
+    backend,
+    recognizer,
+    warmUp: async () => {
+      await Promise.all(workers.map((w) => w.warmUp()));
+      return titleWorker.provider === "webgpu" ? "gpu" : "cpu";
+    },
+    dispose: () => {
+      for (const w of workers) w.dispose();
+    },
+  };
+}

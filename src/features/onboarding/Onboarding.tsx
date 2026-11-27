@@ -3,6 +3,7 @@ import type { Size } from "@/lib/vision/framing";
 import type { Settings } from "@/lib/storage/settings";
 import { cn } from "@/lib/utils";
 import { CalibrateStep, CameraStep, ConsentStep, HowToStep, OptionsStep, SignInStep, WelcomeStep } from "./steps";
+import { OcrStep } from "./OcrStep";
 
 interface Props {
   settings: Settings;
@@ -11,9 +12,9 @@ interface Props {
   viewSize: Size;
 }
 
-const STEP_COUNT = 7;
+const STEP_COUNT = 8;
 
-/** 初回起動のセットアップ。同意 → サインイン → カメラ選択 → キャリブレーション → 使い方 → オプション → 改善への協力 */
+/** 初回起動のセットアップ。同意 → サインイン → カメラ選択 → キャリブレーション → 使い方 → 読み取りの最適化 → オプション → 改善への協力 */
 export default function Onboarding({ settings, update, viewSize }: Props) {
   const step = Math.min(Math.max(settings.onboardStep, 0), STEP_COUNT - 1);
   const go = (n: number) => update({ onboardStep: n });
@@ -44,8 +45,9 @@ export default function Onboarding({ settings, update, viewSize }: Props) {
         {step === 2 && <CameraStep settings={settings} update={update} onNext={next} />}
         {step === 3 && <CalibrateStep settings={settings} update={update} viewSize={viewSize} onNext={next} />}
         {step === 4 && <HowToStep settings={settings} onNext={next} />}
-        {step === 5 && <OptionsStep settings={settings} update={update} onNext={next} />}
-        {step === 6 && <ConsentStep onDone={(statsConsent) => update({ statsConsent, onboarded: true })} />}
+        {step === 5 && <OcrStep settings={settings} update={update} onNext={next} />}
+        {step === 6 && <OptionsStep settings={settings} update={update} onNext={next} />}
+        {step === 7 && <ConsentStep onDone={(statsConsent) => update({ statsConsent, onboarded: true })} />}
       </div>
     </div>
   );

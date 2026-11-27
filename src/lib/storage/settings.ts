@@ -1,4 +1,6 @@
 import { DEFAULT_SYNC_TARGET, isSyncTarget, type SyncTarget } from "@/lib/bpi/syncTarget";
+import type { OcrBenchmarkResult } from "@/lib/recognition/benchmark";
+import type { OcrBackend } from "@/lib/recognition/ocrSetup";
 import { isValidRect } from "@/lib/vision/guideEdit";
 import { GUIDE_KEYS, migrateLegacyLayout, type CustomGuides, type GuideLayout, type NormRect } from "@/lib/vision/guides";
 
@@ -27,6 +29,10 @@ export interface Settings {
   termsAcceptedAt: number | null;
   /** セットアップウィザードの現在位置。途中で閉じても続きから再開する */
   onboardStep: number;
+  /** 読み取りの処理（GPU / CPU）。未設定（ベンチマーク前）なら、WebGPU が使えれば GPU */
+  ocrBackend: OcrBackend | null;
+  /** 最後に行ったベンチマークの結果 */
+  ocrBenchmark: OcrBenchmarkResult | null;
 }
 
 const KEY = "bpim2-camera:settings";
@@ -48,6 +54,8 @@ export function defaultSettings(): Settings {
     onboarded: false,
     termsAcceptedAt: null,
     onboardStep: 0,
+    ocrBackend: null,
+    ocrBenchmark: null,
   };
 }
 
@@ -63,7 +71,7 @@ export function loadSettings(storage: Pick<Storage, "getItem" | "setItem"> = loc
       const aspect = typeof parsed.layoutAspect === "number" && parsed.layoutAspect > 0.2 && parsed.layoutAspect < 5 ? parsed.layoutAspect : null;
       // 縦横比が分からない枠は、旧来どおり表示領域全体への割合として扱う
       // 壊れた値は既定に戻す
-      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET, cameraId: typeof parsed.cameraId === "string" && parsed.cameraId ? parsed.cameraId : null };
+      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET, cameraId: typeof parsed.cameraId === "string" && parsed.cameraId ? parsed.cameraId : null, ocrBackend: parsed.ocrBackend === "gpu" || parsed.ocrBackend === "cpu" ? parsed.ocrBackend : null };
     }
   } catch {
     /* 壊れた値や private モードでは既定値で動かす */

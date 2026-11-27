@@ -1,55 +1,47 @@
-import { useEffect, useRef } from "react";
-import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
-import { EnginePool } from "@/lib/recognition/paddle/enginePool";
-import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { isBenchmarkRunning, subscribeBenchmark } from "@/lib/recognition/benchmark";
+import { createOcrSetup, type OcrBackend, type OcrSetup } from "@/lib/recognition/ocrSetup";
 import { hasWebGpu } from "@/lib/recognition/paddle/webgpu";
-import { WorkerOcrEngine } from "@/lib/recognition/paddle/workerEngine";
 import type { Recognizer } from "@/lib/recognition/recognizer";
 import type { SongMasterEntry } from "@/lib/songs/types";
 
-/** 曲名用の Worker と、（CPU のとき）スコア欄・判定表用の Worker から、認識器を作る */
-function createRecognizer(getMaster: () => readonly SongMasterEntry[], titleWorker: WorkerOcrEngine, passWorker?: WorkerOcrEngine): Recognizer {
-  // 枠で撮った画像は PaddleOCR、全体画像の取り込みは Tesseract で読む
-  return new PaddleRecognizer(titleWorker, getMaster, new TesseractRecognizer(getMaster), {
-    passEngine: passWorker && new EnginePool([passWorker]),
-    ahead: passWorker ? Number.POSITIVE_INFINITY : 0,
-  });
-}
-
 /**
  * OCR のエンジン（Worker）を用意し、認識器を返す。モデルは撮影前に読み込んでおく。
- * WebGPU があれば GPU で読む（Worker 1 つ。GPU は 1 つずつしか読めないので、分けても速くならない）。
- * なければ CPU で、曲名と、スコア欄・判定表を、別々の Worker で同時に読む（実機で約 25% 速い）。
- * 返す関数は、その時点の認識器を返す（GPU の有無が分かると作り直すため）。
+ * 処理（GPU / CPU）は設定に従い、未設定なら WebGPU が使えれば GPU。設定が変わったら作り直す。
+ * ベンチマークの間は Worker を止める（スマホで、モデルを何組もメモリに載せないため）。enabled が false の間も作らない。
+ * 返す関数は、その時点の認識器を返す。
  */
-export function useOcrEngine(songs: readonly SongMasterEntry[]): () => Recognizer {
+export function useOcrEngine(songs: readonly SongMasterEntry[], preferred: OcrBackend | null, enabled = true): () => Recognizer {
   const songsRef = useRef(songs);
   songsRef.current = songs;
-  const recognizerRef = useRef<Recognizer | null>(null);
+  const setupRef = useRef<OcrSetup | null>(null);
+  const benchmarking = useSyncExternalStore(subscribeBenchmark, isBenchmarkRunning);
+  // 未設定のときに使う処理（WebGPU の有無を調べてから決まる）
+  const [fallback, setFallback] = useState<OcrBackend | null>(null);
+  useEffect(() => {
+    if (preferred) return;
+    let alive = true;
+    void hasWebGpu().then((gpu) => alive && setFallback(gpu ? "gpu" : "cpu"));
+    return () => {
+      alive = false;
+    };
+  }, [preferred]);
+  const backend = preferred ?? fallback;
+  const active = enabled && !benchmarking && backend !== null;
 
   useEffect(() => {
-    const getMaster = () => songsRef.current;
-    const titleWorker = new WorkerOcrEngine();
-    const workers = [titleWorker];
-    recognizerRef.current = createRecognizer(getMaster, titleWorker);
-    let disposed = false;
-    void titleWorker.warmUp().catch(() => undefined);
-    void hasWebGpu().then((gpu) => {
-      if (gpu || disposed) return;
-      const passWorker = new WorkerOcrEngine();
-      workers.push(passWorker);
-      void passWorker.warmUp().catch(() => undefined);
-      recognizerRef.current = createRecognizer(getMaster, titleWorker, passWorker);
-    });
+    if (!active || !backend) return;
+    const setup = createOcrSetup(backend, () => songsRef.current);
+    setupRef.current = setup;
+    void setup.warmUp().catch(() => undefined);
     return () => {
-      disposed = true;
-      for (const w of workers) w.dispose();
-      recognizerRef.current = null;
+      setup.dispose();
+      if (setupRef.current === setup) setupRef.current = null;
     };
-  }, []);
+  }, [active, backend]);
 
   return () => {
-    if (!recognizerRef.current) throw new Error("OCR の準備ができていません");
-    return recognizerRef.current;
+    if (!setupRef.current) throw new Error("OCR の準備ができていません。少し待ってから、もう一度お試しください");
+    return setupRef.current.recognizer;
   };
 }

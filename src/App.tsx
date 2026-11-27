@@ -26,8 +26,8 @@ export default function App() {
   useSampleUpload(settings);
   useDebugMode(settings.debugMode);
   const { songs } = useMaster();
-  // セットアップ中も、OCR のモデルを読み込んでおく
-  const getRecognizer = useOcrEngine(songs);
+  // セットアップ中も、OCR のモデルを読み込んでおく（処理を決めるベンチマークの前は、まだ作らない）
+  const getRecognizer = useOcrEngine(songs, settings.ocrBackend, settings.onboarded || settings.ocrBackend !== null);
   const reader = useCaptureReader({ getRecognizer, songs, settings });
   const install = useInstallPrompt(settings.onboarded);
   const [tab, setTab] = useState<Tab>("camera");
