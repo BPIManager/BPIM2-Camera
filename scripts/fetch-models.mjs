@@ -5,8 +5,9 @@ import path from "node:path";
 
 const BASE = "https://huggingface.co/snowfluke/ppu-paddle-ocr-models/resolve/main";
 const FILES = [
-  ["detection/ort/PP-OCRv6_small_det.ort", "PP-OCRv6_small_det.ort"],
-  ["recognition/ort/PP-OCRv6_small_rec.ort", "PP-OCRv6_small_rec.ort"],
+  // 本読みは ONNX 形式（WebGPU でも読める。.ort は CPU 向けに最適化済みで、WebGPU では読めない）
+  ["detection/PP-OCRv6_small_det.onnx", "PP-OCRv6_small_det.onnx"],
+  ["recognition/PP-OCRv6_small_rec.onnx", "PP-OCRv6_small_rec.onnx"],
   ["recognition/ppocrv6_dict.txt", "ppocrv6_dict.txt"],
   ["detection/ort/PP-OCRv6_tiny_det.ort", "PP-OCRv6_tiny_det.ort"],
   ["recognition/ort/PP-OCRv6_tiny_rec.ort", "PP-OCRv6_tiny_rec.ort"],

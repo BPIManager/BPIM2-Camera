@@ -113,7 +113,8 @@ export default defineConfig({
   server: { host: true, allowedHosts: [".ts.net"], proxy: PROXY },
   preview: { proxy: PROXY },
   build: { rollupOptions: { input: { main: path.resolve(import.meta.dirname, "index.html"), signin: path.resolve(import.meta.dirname, "signin.html") } } },
-  // PaddleOCR は CPU（WASM）だけで動かす。WebGPU 版の WASM は 30MB と大きい
-  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src"), "onnxruntime-web": "onnxruntime-web/wasm" } },
+  // PaddleOCR は、WebGPU が使える端末では GPU、なければ CPU（WASM）で動かす。WebGPU も使える版は WASM が約 30MB（CPU だけの版は約 15MB）だが、
+  // 実機で約 45% 速くなる（初回だけ取得してキャッシュする）
+  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src"), "onnxruntime-web": "onnxruntime-web/webgpu" } },
   test: { environment: "node", include: ["test/**/*.test.ts"] },
 });

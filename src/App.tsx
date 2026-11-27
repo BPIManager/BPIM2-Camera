@@ -20,6 +20,7 @@ import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
 import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
 import { WorkerOcrEngine } from "@/lib/recognition/paddle/workerEngine";
 import { EnginePool } from "@/lib/recognition/paddle/enginePool";
+import { hasWebGpu } from "@/lib/recognition/paddle/webgpu";
 import { isAbortError, raceAbort } from "@/lib/async/abort";
 import { logDebug, saveCaptures, setDebugMode } from "@/lib/debug/ocrLog";
 import type { OcrTrace, Recognizer, SongProgress } from "@/lib/recognition/recognizer";
@@ -72,21 +73,32 @@ export default function App() {
   songsRef.current = songs;
   const enginesRef = useRef<WorkerOcrEngine[]>([]);
   const recognizerRef = useRef<Recognizer | null>(null);
-  if (!recognizerRef.current) {
-    // 曲名と、スコア欄・判定表を、別々の Worker で同時に読む（実機で約 25% 速い）。スコア欄・判定表は先読みし、要らなくなった分は取り消す
-    const titleWorker = new WorkerOcrEngine();
-    const passWorker = new WorkerOcrEngine();
-    enginesRef.current = [titleWorker, passWorker];
+  const makeRecognizer = (titleWorker: WorkerOcrEngine, passWorker?: WorkerOcrEngine) =>
     // 枠で撮った画像は PaddleOCR、全体画像の取り込みは Tesseract で読む
-    recognizerRef.current = new PaddleRecognizer(titleWorker, () => songsRef.current, new TesseractRecognizer(() => songsRef.current), {
-      passEngine: new EnginePool([passWorker]),
-      ahead: Number.POSITIVE_INFINITY,
+    new PaddleRecognizer(titleWorker, () => songsRef.current, new TesseractRecognizer(() => songsRef.current), {
+      passEngine: passWorker && new EnginePool([passWorker]),
+      ahead: passWorker ? Number.POSITIVE_INFINITY : 0,
     });
+  if (!recognizerRef.current) {
+    const titleWorker = new WorkerOcrEngine();
+    enginesRef.current = [titleWorker];
+    recognizerRef.current = makeRecognizer(titleWorker);
   }
 
-  // PaddleOCR のモデルを撮影前に読み込んでおく
+  // PaddleOCR のモデルを撮影前に読み込んでおく。
+  // WebGPU があれば GPU で読む（Worker 1 つ。GPU は 1 つずつしか読めないので、分けても速くならない）。
+  // なければ CPU で、曲名と、スコア欄・判定表を、別々の Worker で同時に読む（実機で約 25% 速い）。スコア欄・判定表は先読みし、要らなくなった分は取り消す
   useEffect(() => {
-    for (const e of enginesRef.current) void e.warmUp().catch(() => undefined);
+    const [titleWorker] = enginesRef.current;
+    if (!titleWorker) return;
+    void titleWorker.warmUp().catch(() => undefined);
+    void hasWebGpu().then((gpu) => {
+      if (gpu || enginesRef.current.length > 1) return;
+      const passWorker = new WorkerOcrEngine();
+      enginesRef.current.push(passWorker);
+      void passWorker.warmUp().catch(() => undefined);
+      recognizerRef.current = makeRecognizer(titleWorker, passWorker);
+    });
   }, []);
 
   if (!settings.onboarded) {

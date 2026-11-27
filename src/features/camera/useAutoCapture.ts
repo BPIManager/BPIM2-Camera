@@ -49,7 +49,8 @@ export function useAutoCapture({
 
   useEffect(() => {
     if (!enabled) return;
-    const engine = new WorkerOcrEngine(createTinyWorker);
+    // 下見は軽い tiny を CPU で読む（.ort 形式。GPU は本読みに空けておく）
+    const engine = new WorkerOcrEngine(createTinyWorker, { ep: "wasm" });
     const gate = new AutoCaptureGate();
     let prev: Gray | null = null;
     let wasPaused = false;

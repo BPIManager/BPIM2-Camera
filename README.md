@@ -52,7 +52,7 @@ Set in `.env.local` (see `.env.example`). They are read at build time, so the pr
 
 ## How a result is read
 
-The camera path crops three regions with the guide frames and reads them with PaddleOCR (PP-OCRv6 via `ppu-paddle-ocr` / onnxruntime-web). Importing an image (no frames) falls back to a whole-image recognizer.
+The camera path crops three regions with the guide frames and reads them with PaddleOCR (PP-OCRv6 via `ppu-paddle-ocr` / onnxruntime-web). It runs on the GPU (WebGPU) when the device has it, otherwise on the CPU (multi-threaded WASM), where the title and the score/judge regions are read in two workers at the same time. Importing an image (no frames) falls back to a whole-image recognizer.
 
 1. **Score**: the cyan digits are extracted by color, then read by several preprocessing passes; the EX score is decided when independent readings agree (consensus engine). The judge table (PGREAT / GREAT / ...) is used as a cross-check, which also catches one-digit errors.
 2. **Song-title band**: reads difficulty, level, and note count to narrow the song master, then matches the title, artist, and genre by edit distance. Reading passes: grayscale 1200 px, then the raw image at 900 px.
@@ -61,7 +61,7 @@ The camera path crops three regions with the guide frames and reads them with Pa
 
 The OCR trace (which pass produced what) is kept with each training sample and shown in debug mode.
 
-Models: `public/models/paddle` (small ≈ 31 MB, tiny ≈ 6 MB; fetched by `pnpm models:fetch`, served from the app so it works offline). `public/models/digits.json` is a small nearest-neighbor digit classifier kept as an extra vote.
+Models: `public/models/paddle` (small ≈ 31 MB as `.onnx` so WebGPU can load it, tiny ≈ 6 MB as `.ort`; fetched by `pnpm models:fetch`, served from the app so it works offline). `public/models/digits.json` is a small nearest-neighbor digit classifier kept as an extra vote.
 
 ### Flow
 
@@ -196,7 +196,7 @@ location / {
 }
 ```
 
-COOP/COEP are required for the multi-threaded WASM. The Service Worker does not serve the app shell for navigations to `/__/auth/`.
+COOP/COEP are required for the multi-threaded WASM (the CPU path on devices without WebGPU). The Service Worker does not serve the app shell for navigations to `/__/auth/`.
 
 ## Testing on a phone (Tailscale)
 
