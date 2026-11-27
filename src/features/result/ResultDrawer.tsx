@@ -1,4 +1,3 @@
-import { inferSide, resolveLayout } from "@/lib/vision/guides";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -42,7 +41,7 @@ import {
   type SelfInfo,
 } from "@/lib/bpi/songData";
 import { saveResult } from "@/lib/storage/history";
-import { saveSample } from "@/lib/storage/samples";
+import { confirmSample } from "@/lib/storage/samples";
 import { flushIfEnabled } from "@/lib/training/upload";
 import { saveImage } from "@/lib/share/save";
 import { shareResult } from "@/lib/share/share";
@@ -113,25 +112,18 @@ export default function ResultDrawer({
   const commit = async () => {
     if (!ed.record) return;
     await saveResult(ed.record, draft.image);
-    // 統計への同意があるときだけ、確認済みの値を正解ラベルとして学習サンプルを貯める
+    // 読み取りが終わった時点で貯めた学習サンプルに、確認済みの値を正解ラベルとして足し、送り直す
     if (settings.statsConsent === true && draft.regions) {
-      await saveSample({
-        id: ed.record.id,
-        createdAt: ed.record.createdAt,
-        playSide: inferSide(resolveLayout(settings.layout)),
+      const label = {
         chart: ed.record.chart,
         exScore: ed.record.exScore,
-        autoConfirmed:
-          ed.record.correctedFields.length === 0 &&
-          draft.resolution?.autoConfirm === true,
+        autoConfirmed: ed.record.correctedFields.length === 0 && draft.resolution?.autoConfirm === true,
         correctedFields: ed.record.correctedFields,
-        scoreCrop: draft.regions.score,
-        titleCrop: draft.regions.title,
-        judgeCrop: draft.regions.judge,
-        ocr: draft.ocr,
-      });
-      // 貯めたものを送る。確定の操作は待たせない
-      void flushIfEnabled(settings)?.catch(() => undefined);
+      };
+      // 確定の操作は待たせない
+      void confirmSample(draft.id, label)
+        .then(() => flushIfEnabled(settings))
+        .catch(() => undefined);
     }
   };
 

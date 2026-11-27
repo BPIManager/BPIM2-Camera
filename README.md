@@ -69,9 +69,9 @@ Loaded from BPIM2 `GET /api/v2/songs/master` at startup and cached. If the reque
 
 ## Training data
 
-Opt-in. When the user agrees to statistics and turns on "include images", confirmed results (ground-truth labels) and the cropped images (score, title, and judge regions only; never the full photo) are stored on the device. "Export" in Settings makes a zip (`labels.json` and images).
+Opt-in. When the user agrees to statistics and turns on "include images", every camera read is stored on the device as soon as OCR finishes, whether it succeeded or failed (no confirmation needed): the cropped images (score, title, and judge regions only; never the full photo) and the OCR trace. If the user later confirms the result, the confirmed values are added as the ground-truth label (`confirmed: true`) and the sample is uploaded again, overwriting the earlier one. Samples that were never confirmed have `confirmed: false` and null label fields. Cancelled reads and imported images (no crops) are not collected. "Export" in Settings makes a zip (`labels.json` and images).
 
-Upload (`src/lib/training/upload.ts`): when consent is given and `VITE_STATS_UPLOAD_ENDPOINT` is set, unsent samples are uploaded oldest first on result confirmation, app start / setting change, and when the device comes back online. Failures stay in the queue and are retried. Samples are written to R2 as:
+Upload (`src/lib/training/upload.ts`): when consent is given and `VITE_STATS_UPLOAD_ENDPOINT` is set, unsent samples are uploaded oldest first when a read finishes, on confirmation, on app start / setting change, and when the device comes back online. Failures stay in the queue and are retried. Samples are written to R2 as:
 
 ```
 samples/<deviceId>/<sampleId>/{score.jpg, title.jpg, judge.jpg, labels.json}

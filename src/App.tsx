@@ -13,6 +13,8 @@ import SettingsView from "@/features/settings/SettingsView";
 import { useMaster } from "@/hooks/useMaster";
 import { useInstallMode } from "@/lib/pwa/install";
 import { useSampleUpload } from "@/hooks/useSampleUpload";
+import { collectReadSample } from "@/lib/training/collect";
+import { flushIfEnabled } from "@/lib/training/upload";
 import { useSettings } from "@/hooks/useSettings";
 import { TesseractRecognizer } from "@/lib/recognition/ocr/tesseractRecognizer";
 import { PaddleRecognizer } from "@/lib/recognition/paddle/paddleRecognizer";
@@ -135,7 +137,7 @@ export default function App() {
       if (settings.saveToCameraRoll && source === "camera") setUnsaved(image);
       return;
     }
-    setDraft({
+    const next: Draft = {
       id: crypto.randomUUID(),
       image,
       source,
@@ -143,7 +145,12 @@ export default function App() {
       ocr,
       raw,
       resolution: raw ? resolveResult(raw, songs) : null,
-    });
+    };
+    setDraft(next);
+    // 確定を待たず、読み取りが終わった時点で学習サンプルとして貯めて送る（成功・失敗を問わない）
+    void collectReadSample(next, settings)
+      .then((saved) => (saved ? flushIfEnabled(settings) : null))
+      .catch(() => undefined);
   };
 
   return (

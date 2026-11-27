@@ -72,14 +72,16 @@ let inFlight: Promise<FlushResult> | null = null;
 
 /** 未送信のサンプルを古い順に送る。同時に 1 つだけ動く。失敗したものは残し、次の機会にやり直す */
 export function flushSamples(opts: UploadOptions): Promise<FlushResult> {
-  inFlight ??= (async () => {
+  // 送っている最中に増えた・変わったサンプルを取りこぼさないよう、終わってからもう一度走らせる
+  if (inFlight) return inFlight.then(() => flushSamples(opts));
+  inFlight = (async () => {
     const result: FlushResult = { uploaded: 0, failed: 0 };
     try {
       for (const s of await listSamples()) {
         if (s.uploadedAt !== undefined) continue;
         try {
           await uploadSample(s, opts);
-          await markUploaded(s.id);
+          await markUploaded(s.id, s.rev ?? 0);
           result.uploaded++;
         } catch {
           result.failed++;

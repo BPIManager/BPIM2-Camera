@@ -7,13 +7,15 @@ export interface TrainingLabel {
   createdAt: number;
   playSide: "1P" | "2P";
   /** 正解の EX スコア。数字の切り出しと分類器の学習に使う */
-  exScore: number;
-  digits: string;
-  songId: number;
-  title: string;
-  level: number;
-  difficulty: string;
-  notes: number;
+  exScore: number | null;
+  digits: string | null;
+  songId: number | null;
+  title: string | null;
+  level: number | null;
+  difficulty: string | null;
+  notes: number | null;
+  /** ユーザーが確定したか。false のときは正解ラベルがなく、OCR の記録（ocr）だけがある */
+  confirmed: boolean;
   autoConfirmed: boolean;
   correctedFields: string[];
   scoreImage: string;
@@ -30,12 +32,13 @@ export function sampleLabel(s: TrainingSample, images: { scoreImage: string; tit
     createdAt: s.createdAt,
     playSide: s.playSide,
     exScore: s.exScore,
-    digits: String(s.exScore),
-    songId: s.chart.songId,
-    title: s.chart.title,
-    level: s.chart.level,
-    difficulty: s.chart.difficulty,
-    notes: s.chart.notes,
+    digits: s.exScore === null ? null : String(s.exScore),
+    songId: s.chart?.songId ?? null,
+    title: s.chart?.title ?? null,
+    level: s.chart?.level ?? null,
+    difficulty: s.chart?.difficulty ?? null,
+    notes: s.chart?.notes ?? null,
+    confirmed: s.confirmed !== false,
     autoConfirmed: s.autoConfirmed,
     correctedFields: s.correctedFields,
     ocr: s.ocr,

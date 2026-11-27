@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import { resetDbForTest, type TrainingSample } from "@/lib/storage/db";
-import { countPendingSamples, listSamples, saveSample } from "@/lib/storage/samples";
+import { confirmSample, countPendingSamples, listSamples, saveSample } from "@/lib/storage/samples";
 import { canUpload, flushSamples } from "@/lib/training/upload";
 import { handle, type Env } from "../worker/src/index";
 import { presignUrl } from "../worker/src/presign";
@@ -96,6 +96,18 @@ describe("flushSamples", () => {
     expect(await countPendingSamples()).toBe(0);
     expect((await listSamples()).every((s) => s.uploadedAt !== undefined)).toBe(true);
     expect(await flushSamples(opts(f as unknown as typeof fetch))).toEqual({ uploaded: 0, failed: 0 });
+  });
+
+  it("確定前に送ったサンプルは、確定で正解ラベルが入り、未送信に戻って送り直される", async () => {
+    await saveSample({ ...sample("sample-0001"), chart: null, exScore: null, confirmed: false, rev: 0 });
+    const f = fakeFetch();
+    await flushSamples(opts(f as unknown as typeof fetch));
+    expect((await listSamples())[0]?.uploadedAt).toBeDefined();
+    await confirmSample("sample-0001", { chart: record().chart, exScore: 1796, autoConfirmed: true, correctedFields: [] });
+    const [s] = await listSamples();
+    expect(s).toMatchObject({ confirmed: true, exScore: 1796, rev: 1 });
+    expect(s?.uploadedAt).toBeUndefined();
+    expect(await flushSamples(opts(f as unknown as typeof fetch))).toEqual({ uploaded: 1, failed: 0 });
   });
 
   it("PUT に失敗したサンプルは未送信のまま残す", async () => {

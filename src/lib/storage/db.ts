@@ -8,9 +8,14 @@ export interface TrainingSample {
   id: string;
   createdAt: number;
   playSide: "1P" | "2P";
-  chart: ChartRef;
-  /** ユーザーが確定した EX スコア（正解ラベル） */
-  exScore: number;
+  /** ユーザーが確定した譜面（正解ラベル）。まだ確定していない（読み取っただけの）サンプルは null */
+  chart: ChartRef | null;
+  /** ユーザーが確定した EX スコア（正解ラベル）。まだ確定していなければ null */
+  exScore: number | null;
+  /** ユーザーが結果を確定したか。読み取りが終わった時点で貯めたものは false。古いサンプルにはない（確定済みとみなす） */
+  confirmed?: boolean;
+  /** 内容を変えるたびに増やす番号。送信中に確定された場合に、送信済みの印を誤って付けないため */
+  rev?: number;
   /** 確認操作なし（自動確定のまま）で保存したか */
   autoConfirmed: boolean;
   /** 手で直した項目（song / exScore）。直す前の読み取りが誤りだった印 */
