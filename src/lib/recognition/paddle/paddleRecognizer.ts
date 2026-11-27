@@ -7,10 +7,10 @@ import type { OcrStep, OcrTrace, Recognizer, RecognizeInput } from "../recognize
 import type { OcrEngine, OcrImage, OcrLine } from "./engine";
 import { resolveResult } from "../resolve";
 import { rawFromPaddle } from "./fromPaddle";
-import { deskewBitmap } from "./deskewBitmap";
+import { deskewBitmap, estimateBitmapTilt, rotateBitmap } from "./deskewBitmap";
 
 /** スコア欄・判定表を読む 1 段階 */
-type Pass = { kind: "score"; width: number; mask: Variant | null; isolate?: boolean } | { kind: "judge"; width: number };
+type Pass = { kind: "score"; width: number; mask: Variant | null; isolate?: boolean; deskew?: boolean } | { kind: "judge"; width: number; deskew?: boolean };
 
 /**
  * スコア欄・判定表を読む段階。EX が確定した時点で残りを省く。
@@ -26,9 +26,12 @@ export const PASSES: Record<string, Pass> = {
   raw400: { kind: "score", width: 400, mask: null },
   judge1200: { kind: "judge", width: 1200 },
   judge1600: { kind: "judge", width: 1600 },
+  // 傾きを直して読み直す（斜めに撮った写真）。傾きが小さければ省く
+  scoreDeskew: { kind: "score", width: 700, mask: "cyanFill", deskew: true },
+  judgeDeskew: { kind: "judge", width: 1200, deskew: true },
 };
 export const DEFAULT_PLAN = ["judge700", "cyan", "isolate", "loose", "raw400", "judge1200", "judge1600"] as const;
-const SCORE_PASS_COUNT = Object.values(PASSES).filter((p) => p.kind === "score").length;
+const SCORE_PASS_COUNT = Object.values(PASSES).filter((p) => p.kind === "score" && !p.deskew).length;
 /**
  * 曲名の枠は、まずグレースケールで濃淡を伸ばして読む（色つきの文字や背景に強い）。
  * 難易度や曲名が取れなければ、元の画像でも読み直す
@@ -54,6 +57,11 @@ export interface PaddleRecognizerOptions {
    * 結果は先読みしないときと同じになる。既定は 0（先読みしない）
    */
   ahead?: number;
+  /**
+   * スコア欄・判定表を傾き補正するときの、傾きの求め方。title は曲名の枠から求めた傾きを使う（3 か所は同じ写真なので、傾きは共通。
+   * 曲名の枠は文字の行が多く、数字 1 行のスコア欄より傾きを推定しやすい）。self は、それぞれの枠から求める。既定は title
+   */
+  tiltSource?: "title" | "self";
 }
 
 /** 先読みの取り消しに対応したエンジン（EnginePool） */
@@ -137,11 +145,25 @@ export class PaddleRecognizer implements Recognizer {
     const plan = (this.options.plan ?? DEFAULT_PLAN).filter((n) => PASSES[n]);
     const ahead = this.options.ahead ?? 0;
     const passEngine = this.options.passEngine ?? this.engine;
-    const reads: Promise<OcrLine[]>[] = [];
-    const readPass = (i: number): Promise<OcrLine[]> => {
+    // 傾きを直したスコア欄・判定表（要るときに 1 回だけ作る）。傾きが小さければ null
+    let titleTilt: number | null = null;
+    const tiltOf = (bitmap: ImageBitmap) => (this.options.tiltSource === "self" ? estimateBitmapTilt(bitmap) : (titleTilt ??= estimateBitmapTilt(r.title)));
+    const rotated = new Map<ImageBitmap, Promise<ImageBitmap | null>>();
+    const leveled = (bitmap: ImageBitmap) => {
+      if (!rotated.has(bitmap)) rotated.set(bitmap, rotateBitmap(bitmap, tiltOf(bitmap)).then((x) => x?.bitmap ?? null));
+      return rotated.get(bitmap)!;
+    };
+    /** 1 段階を読む。傾き補正の段階で、傾きが小さければ null（読まない） */
+    const readOne = async (pass: Pass): Promise<OcrLine[] | null> => {
+      const source = pass.kind === "judge" ? r.judge : r.score;
+      const bitmap = pass.deskew ? await leveled(source) : source;
+      if (!bitmap) return null;
+      return pass.kind === "judge" ? this.read(bitmap, pass.width, null, false, passEngine) : this.read(bitmap, pass.width, pass.mask, pass.isolate, passEngine);
+    };
+    const reads: Promise<OcrLine[] | null>[] = [];
+    const readPass = (i: number): Promise<OcrLine[] | null> => {
       if (!reads[i]) {
-        const pass = PASSES[plan[i]!]!;
-        reads[i] = pass.kind === "judge" ? this.read(r.judge, pass.width, null, false, passEngine) : this.read(r.score, pass.width, pass.mask, pass.isolate, passEngine);
+        reads[i] = readOne(PASSES[plan[i]!]!);
         // 使わずに取り消した先読みの失敗は、捨てる
         reads[i].catch(() => undefined);
       }
@@ -199,19 +221,23 @@ export class PaddleRecognizer implements Recognizer {
       if (raw?.exScore.value != null) break;
       const pass = PASSES[name]!;
       prefetch(i + 1 + ahead);
-      if (pass.kind === "judge") {
-        stage(judge.length === 0 ? "判定の内訳を読んでいます" : "判定の数字からスコアを確かめています");
-        judge.push(await readPass(i));
-      } else {
-        stage(score.length === 0 ? "EXスコアを読んでいます" : `EXスコアを読み直しています（${score.length + 1}/${SCORE_PASS_COUNT}）`);
-        score.push(await readPass(i));
+      if (pass.kind === "judge") stage(pass.deskew ? "傾きを直して判定を読んでいます" : judge.length === 0 ? "判定の内訳を読んでいます" : "判定の数字からスコアを確かめています");
+      else stage(pass.deskew ? "傾きを直してEXスコアを読んでいます" : score.length === 0 ? "EXスコアを読んでいます" : `EXスコアを読み直しています（${score.length + 1}/${SCORE_PASS_COUNT}）`);
+      const lines = await readPass(i);
+      // 傾きが小さく、読み直さなかった
+      if (!lines) continue;
+      if (pass.kind === "judge") judge.push(lines);
+      else {
+        score.push(lines);
         scoreGroups.push(pass.mask ? "color" : "raw");
       }
       raw = rawFromPaddle({ title, score, scoreGroups, judge }, this.getMaster());
       announceIfResolved(raw);
-      const label = pass.kind === "judge" ? `judge:${pass.width}` : `score:${pass.mask ?? "raw"}${pass.isolate ? "-isolate" : ""}${pass.width}`;
+      const label = (pass.kind === "judge" ? `judge:${pass.width}` : `score:${pass.mask ?? "raw"}${pass.isolate ? "-isolate" : ""}${pass.width}`).replace(":", pass.deskew ? ":deskew:" : ":");
       mark(label, (pass.kind === "judge" ? judge : score).at(-1)!.length, raw);
     }
+    // 傾きを直した画像は、もう使わない
+    for (const b of rotated.values()) void b.then((x) => x?.close()).catch(() => undefined);
     const entry = {
       title,
       score,
