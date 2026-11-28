@@ -19,11 +19,15 @@ export const FILE_KINDS = {
   useOption: { ext: "jpg", type: "image/jpeg" },
   fastSlow: { ext: "jpg", type: "image/jpeg" },
   missCount: { ext: "jpg", type: "image/jpeg" },
+  // 撮影した写真の全体（FAST/SLOW など、切り出しの位置がまだ定まらない欄の学習に使う）
+  full: { ext: "jpg", type: "image/jpeg" },
   labels: { ext: "json", type: "application/json" },
 } as const;
 type Kind = keyof typeof FILE_KINDS;
 
 export const MAX_IMAGE_BYTES = 512 * 1024;
+/** 全体の写真は大きいので、別に上限を設ける */
+export const MAX_FULL_BYTES = 2 * 1024 * 1024;
 export const MAX_LABELS_BYTES = 16 * 1024;
 export const URL_TTL_SECONDS = 600;
 
@@ -40,14 +44,14 @@ function parse(raw: unknown): Body | string {
   const b = raw as Record<string, unknown>;
   if (typeof b.deviceId !== "string" || !ID.test(b.deviceId)) return "deviceId が不正です";
   if (typeof b.id !== "string" || !ID.test(b.id)) return "id が不正です";
-  if (!Array.isArray(b.files) || b.files.length === 0 || b.files.length > 7) return "files が不正です";
+  if (!Array.isArray(b.files) || b.files.length === 0 || b.files.length > Object.keys(FILE_KINDS).length) return "files が不正です";
   const seen = new Set<string>();
   const files: Body["files"] = [];
   for (const f of b.files as Record<string, unknown>[]) {
     const name = f?.name;
     if (typeof name !== "string" || !(name in FILE_KINDS) || seen.has(name)) return "ファイル名が不正です";
     seen.add(name);
-    const limit = name === "labels" ? MAX_LABELS_BYTES : MAX_IMAGE_BYTES;
+    const limit = name === "labels" ? MAX_LABELS_BYTES : name === "full" ? MAX_FULL_BYTES : MAX_IMAGE_BYTES;
     if (typeof f.size !== "number" || !Number.isInteger(f.size) || f.size <= 0 || f.size > limit) return `${name} のサイズが不正です`;
     files.push({ name: name as Kind, size: f.size });
   }

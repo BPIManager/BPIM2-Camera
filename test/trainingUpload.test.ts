@@ -64,6 +64,14 @@ describe("署名付き URL を発行する Worker", () => {
     expect(uploads.find((u) => u.name === "missCount")?.url).toContain(`/sample-0001/missCount.jpg?`);
   });
 
+  it("撮影した写真の全体も受け付ける（切り出しより大きい上限）", async () => {
+    const res = await handle(req({ ...good, files: [...good.files, { name: "full", size: 1_500_000 }] }), env);
+    expect(res.status).toBe(200);
+    const { uploads } = (await res.json()) as { uploads: { name: string; url: string }[] };
+    expect(uploads.find((u) => u.name === "full")?.url).toContain(`/sample-0001/full.jpg?`);
+    expect((await handle(req({ ...good, files: [...good.files, { name: "full", size: 3_000_000 }] }), env)).status).toBe(400);
+  });
+
   it.each([
     ["パスを抜ける id", { ...good, id: "../../etc" }],
     ["未知のファイル名", { ...good, files: [...good.files, { name: "evil", size: 1 }] }],
