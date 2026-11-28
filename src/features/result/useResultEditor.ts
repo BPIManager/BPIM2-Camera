@@ -19,9 +19,11 @@ export function useResultEditor(draft: Draft, version: string) {
   const showManualEx = manualEx;
 
   const exScore = exText === "" ? null : Number(exText);
-  // 使用オプション。読み取りは結果を出したあとに届く（draft が更新される）ので、手で選ぶまでは読み取りの値に従う
-  const [optionPick, setOptionPick] = useState<{ value: string | null } | null>(null);
-  const useOption = optionPick ? optionPick.value : (draft.raw?.useOption ?? null);
+  // 使用オプション。読み取りは結果を出したあとに届く（draft が更新される）ので、手で選ぶまでは読み取りの値に従う。
+  // 正規（OFF）のときは USE OPTION の表示自体が出ないので、読めなかったときは OFF とする
+  const [optionPick, setOptionPick] = useState<{ value: string } | null>(null);
+  const readOption = draft.raw?.useOption ?? "OFF";
+  const useOption = optionPick ? optionPick.value : readOption;
   // ミスカウント・FAST・SLOW（いまは読み取れないので、手で入力する。入力した値は学習サンプルの正解にもなる）
   const [counts, setCounts] = useState<Record<CountKey, string>>({ missCount: draft.raw?.missCount?.toString() ?? "", fast: "", slow: "" });
   const num = (t: string) => (t === "" ? null : Number(t));
@@ -52,9 +54,9 @@ export function useResultEditor(draft: Draft, version: string) {
     const fields: string[] = [];
     if (chart && chart.songId !== draft.resolution?.chart?.songId) fields.push("song");
     if (exScore !== (draft.resolution?.exScore ?? null)) fields.push("exScore");
-    if (optionPick && optionPick.value !== (draft.raw?.useOption ?? null)) fields.push("useOption");
+    if (optionPick && optionPick.value !== readOption) fields.push("useOption");
     return fields;
-  }, [chart, exScore, draft.resolution, draft.raw, optionPick]);
+  }, [chart, exScore, draft.resolution, readOption, optionPick]);
 
   const record: ResultRecord | null =
     chart && valid && exScore !== null
@@ -92,9 +94,9 @@ export function useResultEditor(draft: Draft, version: string) {
       setExText("");
       setManualEx(true);
     },
-    /** 使用オプション（読み取り、または手で選んだもの）。分からなければ null */
+    /** 使用オプション（読み取り、または手で選んだもの）。読めなければ OFF */
     useOption,
-    setUseOption: (value: string | null) => setOptionPick({ value }),
+    setUseOption: (value: string) => setOptionPick({ value }),
     /** ミスカウント・FAST・SLOW の入力（数字の文字列） */
     counts,
     setCount: (key: CountKey, text: string) => setCounts((c) => ({ ...c, [key]: text.replace(/\D/g, "").slice(0, 4) })),

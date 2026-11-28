@@ -18,13 +18,13 @@ export default function ResultDetails({
   counts,
   onCount,
 }: {
-  useOption: string | null;
-  onUseOption: (v: string | null) => void;
+  useOption: string;
+  onUseOption: (v: string) => void;
   counts: Record<CountKey, string>;
   onCount: (key: CountKey, text: string) => void;
 }) {
   // 読み取った値が一覧に無い（DP の組など）ときは、その値も選べるようにする
-  const choices: readonly string[] = useOption && !USE_OPTION_CHOICES.includes(useOption as never) ? [...USE_OPTION_CHOICES, useOption] : USE_OPTION_CHOICES;
+  const choices: readonly string[] = !USE_OPTION_CHOICES.includes(useOption as never) ? [...USE_OPTION_CHOICES, useOption] : USE_OPTION_CHOICES;
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border px-3 py-2">
       <div className="flex items-center justify-between gap-3">
@@ -33,11 +33,10 @@ export default function ResultDetails({
         </label>
         <select
           id="use-option"
-          value={useOption ?? ""}
-          onChange={(e) => onUseOption(e.target.value === "" ? null : e.target.value)}
+          value={useOption}
+          onChange={(e) => onUseOption(e.target.value)}
           className="h-9 min-w-36 rounded-md border border-border bg-background px-2 text-sm"
         >
-          <option value="">（読み取れず）</option>
           {choices.map((c) => (
             <option key={c} value={c}>
               {c}
