@@ -24,6 +24,13 @@ export interface TrainingSample {
   titleCrop: Blob;
   /** 判定表の切り出し（PG/GR の学習に使う）。古いサンプルにはない */
   judgeCrop?: Blob;
+  /** パネルの中のほかの欄の切り出し（使用オプション・FAST/SLOW・ミスカウントの読み取りの学習に使う）。写っていなければない */
+  extraCrops?: { useOption?: Blob; fastSlow?: Blob; missCount?: Blob };
+  /** ユーザーが確定した、使用オプション・ミスカウント・FAST・SLOW（正解ラベル。分からなければ null） */
+  useOption?: string | null;
+  missCount?: number | null;
+  fast?: number | null;
+  slow?: number | null;
   /** サーバーへ送り終えた時刻（ms）。未送信は undefined */
   uploadedAt?: number;
   /** 送信済みのとき、画像も送ったか。画像なし（labels だけ）で送ったあとに、設定で画像を含めるようにしたら、送り直す */

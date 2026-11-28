@@ -15,6 +15,10 @@ export const FILE_KINDS = {
   score: { ext: "jpg", type: "image/jpeg" },
   title: { ext: "jpg", type: "image/jpeg" },
   judge: { ext: "jpg", type: "image/jpeg" },
+  // パネルの中のほかの欄（使用オプション・FAST/SLOW・ミスカウント）の切り出し。読み取りの学習に使う
+  useOption: { ext: "jpg", type: "image/jpeg" },
+  fastSlow: { ext: "jpg", type: "image/jpeg" },
+  missCount: { ext: "jpg", type: "image/jpeg" },
   labels: { ext: "json", type: "application/json" },
 } as const;
 type Kind = keyof typeof FILE_KINDS;
@@ -36,7 +40,7 @@ function parse(raw: unknown): Body | string {
   const b = raw as Record<string, unknown>;
   if (typeof b.deviceId !== "string" || !ID.test(b.deviceId)) return "deviceId が不正です";
   if (typeof b.id !== "string" || !ID.test(b.id)) return "id が不正です";
-  if (!Array.isArray(b.files) || b.files.length === 0 || b.files.length > 4) return "files が不正です";
+  if (!Array.isArray(b.files) || b.files.length === 0 || b.files.length > 7) return "files が不正です";
   const seen = new Set<string>();
   const files: Body["files"] = [];
   for (const f of b.files as Record<string, unknown>[]) {

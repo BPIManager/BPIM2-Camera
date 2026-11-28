@@ -22,12 +22,23 @@ export interface TrainingLabel {
   scoreImage?: string;
   titleImage?: string;
   judgeImage?: string;
+  /** パネルの中のほかの欄の切り出し（写っていて、画像を送る設定のときだけ） */
+  useOptionImage?: string;
+  fastSlowImage?: string;
+  missCountImage?: string;
+  /** ユーザーが確定した値（結果画面で入力・選択したもの）。分からなければ null */
+  useOption: string | null;
+  missCount: number | null;
+  fast: number | null;
+  slow: number | null;
   /** OCR が読んだ文字と確度・確定した結果（正解ラベルと突き合わせて、読み間違いを調べる） */
   ocr?: OcrTrace;
 }
 
 /** 正解ラベル。画像のパスは、zip や R2 のなかでの名前を呼び出し側が決める */
-export function sampleLabel(s: TrainingSample, images: { scoreImage?: string; titleImage?: string; judgeImage?: string }): TrainingLabel {
+export type LabelImages = Pick<TrainingLabel, "scoreImage" | "titleImage" | "judgeImage" | "useOptionImage" | "fastSlowImage" | "missCountImage">;
+
+export function sampleLabel(s: TrainingSample, images: LabelImages): TrainingLabel {
   return {
     id: s.id,
     createdAt: s.createdAt,
@@ -42,12 +53,23 @@ export function sampleLabel(s: TrainingSample, images: { scoreImage?: string; ti
     confirmed: s.confirmed !== false,
     autoConfirmed: s.autoConfirmed,
     correctedFields: s.correctedFields,
+    useOption: s.useOption ?? null,
+    missCount: s.missCount ?? null,
+    fast: s.fast ?? null,
+    slow: s.slow ?? null,
     ocr: s.ocr,
     ...images,
   };
 }
 
 const bytes = async (b: Blob) => new Uint8Array(await b.arrayBuffer());
+
+/** パネルの中のほかの欄の切り出しと、そのファイル名 */
+export const EXTRA_IMAGES = [
+  ["useOption", "option.jpg"],
+  ["fastSlow", "fastslow.jpg"],
+  ["missCount", "miss.jpg"],
+] as const;
 
 /**
  * 学習サンプルを zip にまとめる。画像は枠で切り出したスコア部・曲名帯・判定表だけ（全体画像や位置情報は含めない）。
@@ -63,7 +85,15 @@ export async function buildTrainingZip(samples: readonly TrainingSample[]): Prom
     files[titleImage] = await bytes(s.titleCrop);
     const judgeImage = s.judgeCrop ? `images/${s.id}_judge.jpg` : undefined;
     if (judgeImage && s.judgeCrop) files[judgeImage] = await bytes(s.judgeCrop);
-    labels.push(sampleLabel(s, { scoreImage, titleImage, judgeImage }));
+    const extra: LabelImages = {};
+    for (const [k, name] of EXTRA_IMAGES) {
+      const blob = s.extraCrops?.[k];
+      if (!blob) continue;
+      const path = `images/${s.id}_${name}`;
+      files[path] = await bytes(blob);
+      extra[`${k}Image`] = path;
+    }
+    labels.push(sampleLabel(s, { scoreImage, titleImage, judgeImage, ...extra }));
   }
   files["labels.json"] = new TextEncoder().encode(JSON.stringify(labels, null, 2));
   return { blob: new Blob([zipSync(files, { level: 0 })], { type: "application/zip" }), labels };
