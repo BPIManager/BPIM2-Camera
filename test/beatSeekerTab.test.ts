@@ -16,7 +16,7 @@ const preview = (over: Partial<BeatSeekerPreview> = {}): BeatSeekerPreview => ({
   improved: { exScore: true, clearType: false, missCount: false },
   willUpdate: true,
   beatPt: pt(16650, 16662.5, ["Master II", "Master II"], { before: 139.51, after: 140.2 }),
-  ratePt: pt(500, 530, ["Veteran II", "Veteran III"]),
+  ratePt: pt(500, 530, ["Veteran II", "Veteran III"], { before: 1.2, after: 1.5 }),
   ...over,
 });
 
@@ -38,13 +38,19 @@ describe("beat-seeker のタブ", () => {
     expect(html).toContain("h-full");
   });
 
-  it("上の数字の欄（この譜面の PT・総合の差）と重なる内容は出さない。説明や非公式難易度も出さない", () => {
+  it("この譜面 1 曲の BEAT-PT・Rate-PT（前 → 後）を、それぞれのカードの見出しに出す。説明や非公式難易度は出さない", () => {
+    // 後の値は、上がったときに緑色にする（span で囲む）ので、タグを除いた文字で照合する
     const html = render({ kind: "ok", preview: preview() });
-    expect(html).not.toContain("この譜面");
+    const text = html.replace(/<[^>]+>/g, "");
+    expect(text).toContain("譜面 139.51 → 140.2");
+    expect(text).toContain("譜面 1.2 → 1.5");
     expect(html).not.toContain("非公式難易度");
     expect(html).not.toContain("登録した場合の変動");
-    expect(html).not.toContain("139.51");
-    expect(html).not.toContain("140.2");
+  });
+
+  it("その譜面が対象外（PT がない）なら、譜面の PT は出さない", () => {
+    const html = render({ kind: "ok", preview: preview({ beatPt: pt(16650, 16662.5, ["Master II", "Master II"]), ratePt: pt(500, 530, ["Veteran II", "Veteran III"]) }) });
+    expect(html).not.toContain("譜面 ");
   });
 
   it("段が上がったときは、「Veteran II → III」と短く出す。ティア名が変わるときは、全部を出す", () => {

@@ -65,10 +65,10 @@ function TierStrip({ table, pt }: { table: TierTable; pt: number }) {
 
 /**
  * ティアのカード 1 枚（2 枚を縦に並べ、タブの高さを半分ずつ使う。1 枚は約 150px で収まる）。横いっぱいに広げる。
- * 上から、見出しと総合 PT の差 / ティアの変動（左）とあと何 PT か（右）/ 前 → 後の PT（左）と次の段（右）/ ゲージ / 全ティアの並び。
- * 上の 3 つの数字（EX・BPI・この譜面の PT）と重ならないよう、この譜面の値は出さない
+ * 上から、見出し・この譜面の PT（前 → 後）・総合 PT の差 / ティアの変動（左）とあと何 PT か（右）/ 前 → 後の PT（左）と次の段（右）/ ゲージ / 全ティアの並び。
+ * この譜面の PT は、上の 3 つの数字には、BEAT-PT か Rate-PT の片方（新しい値）しか出ないので、ここに両方の前 → 後を出す
  */
-function TierCard({ table, title, total, tier }: { table: TierTable; title: string; total: PtChange["total"]; tier: PtChange["tier"] }) {
+function TierCard({ table, title, chart, total, tier }: { table: TierTable; title: string; chart: PtChange["chart"]; total: PtChange["total"]; tier: PtChange["tier"] }) {
   const pt = total.after ?? total.before;
   const pos = pt === null ? null : locate(table, pt);
   const delta = total.delta;
@@ -78,8 +78,14 @@ function TierCard({ table, title, total, tier }: { table: TierTable; title: stri
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col justify-between gap-1.5 rounded-md border border-border p-2.5" aria-label={title}>
       <header className="flex items-baseline justify-between gap-2">
-        <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
-        <span className={cn("text-sm font-semibold tabular-nums", delta !== null && delta > 0 ? "text-success" : "text-muted-foreground")}>{delta === null ? "—" : `${formatDelta(delta)} pt`}</span>
+        <h3 className="shrink-0 text-xs font-medium text-muted-foreground">{title}</h3>
+        {/* この譜面 1 曲の PT（前 → 後）。対象外の譜面（BEAT-PT は HYPER ☆11 以上、Rate-PT は ANOTHER・LEGGENDARIA 以外）は出さない */}
+        {chart && (
+          <span className="min-w-0 flex-1 truncate text-center text-[11px] text-muted-foreground tabular-nums" title="この譜面の PT">
+            譜面 {formatPt(chart.before)} → <span className={cn(chart.before !== null && chart.after !== null && chart.after > chart.before && "text-success")}>{formatPt(chart.after)}</span>
+          </span>
+        )}
+        <span className={cn("shrink-0 text-sm font-semibold tabular-nums", delta !== null && delta > 0 ? "text-success" : "text-muted-foreground")}>{delta === null ? "—" : `${formatDelta(delta)} pt`}</span>
       </header>
       <div className="flex items-baseline justify-between gap-3">
         <p className={cn("min-w-0 text-base leading-tight font-bold", up && "text-success")}>{keepTogether(tierText)}</p>
@@ -134,8 +140,8 @@ function Loaded({ preview }: { preview: BeatSeekerPreview }) {
     <div className="flex h-full min-h-72 flex-col gap-2 pb-2">
       {/* BEAT-TIER と Rate-Tier は、縦に 2 段。タブの高さを半分ずつ使う */}
       <div className="flex min-h-0 flex-1 flex-col gap-2">
-        <TierCard table={BEAT_TIERS} title="BEAT-TIER" total={beatPt.total} tier={beatPt.tier} />
-        <TierCard table={RATE_TIERS} title="Rate-Tier" total={ratePt.total} tier={ratePt.tier} />
+        <TierCard table={BEAT_TIERS} title="BEAT-TIER" chart={beatPt.chart} total={beatPt.total} tier={beatPt.tier} />
+        <TierCard table={RATE_TIERS} title="Rate-Tier" chart={ratePt.chart} total={ratePt.total} tier={ratePt.tier} />
       </div>
       {!willUpdate && <p className="shrink-0 text-xs text-muted-foreground">記録が伸びないため、登録しても変わりません</p>}
     </div>
