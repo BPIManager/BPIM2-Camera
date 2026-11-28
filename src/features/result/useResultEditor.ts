@@ -6,7 +6,8 @@ import { toChartRef } from "@/lib/recognition/resolve";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import type { Draft } from "./draft";
 
-export type CountKey = "missCount" | "fast" | "slow";
+/** 手で入力する数。FAST・SLOW は、読み取りを作るまで学習用に写真を集めるだけにする */
+export type CountKey = "missCount";
 
 /** ドロワー内の編集状態。曲か EX が変わるたびに BPI を再計算する（☆10以下は呼ばない） */
 export function useResultEditor(draft: Draft, version: string) {
@@ -19,11 +20,13 @@ export function useResultEditor(draft: Draft, version: string) {
   const showManualEx = manualEx;
 
   const exScore = exText === "" ? null : Number(exText);
-  // 使用オプション。読み取りは結果を出したあとに届く（draft が更新される）ので、手で選ぶまでは読み取りの値に従う
-  const [optionPick, setOptionPick] = useState<{ value: string | null } | null>(null);
-  const useOption = optionPick ? optionPick.value : (draft.raw?.useOption ?? null);
-  // ミスカウント・FAST・SLOW（いまは読み取れないので、手で入力する。入力した値は学習サンプルの正解にもなる）
-  const [counts, setCounts] = useState<Record<CountKey, string>>({ missCount: draft.raw?.missCount?.toString() ?? "", fast: "", slow: "" });
+  // 使用オプション。読み取りは結果を出したあとに届く（draft が更新される）ので、手で選ぶまでは読み取りの値に従う。
+  // 正規（OFF）のときは USE OPTION の表示自体が出ないので、読めなかったときは OFF とする
+  const [optionPick, setOptionPick] = useState<{ value: string } | null>(null);
+  const readOption = draft.raw?.useOption ?? "OFF";
+  const useOption = optionPick ? optionPick.value : readOption;
+  // ミスカウント（いまは読み取れないので、手で入力する。入力した値は学習サンプルの正解にもなる）
+  const [counts, setCounts] = useState<Record<CountKey, string>>({ missCount: draft.raw?.missCount?.toString() ?? "" });
   const num = (t: string) => (t === "" ? null : Number(t));
   const valid = chart !== null && exScore !== null && isExScoreInRange(exScore, chart.notes);
 
@@ -52,9 +55,9 @@ export function useResultEditor(draft: Draft, version: string) {
     const fields: string[] = [];
     if (chart && chart.songId !== draft.resolution?.chart?.songId) fields.push("song");
     if (exScore !== (draft.resolution?.exScore ?? null)) fields.push("exScore");
-    if (optionPick && optionPick.value !== (draft.raw?.useOption ?? null)) fields.push("useOption");
+    if (optionPick && optionPick.value !== readOption) fields.push("useOption");
     return fields;
-  }, [chart, exScore, draft.resolution, draft.raw, optionPick]);
+  }, [chart, exScore, draft.resolution, readOption, optionPick]);
 
   const record: ResultRecord | null =
     chart && valid && exScore !== null
@@ -66,8 +69,8 @@ export function useResultEditor(draft: Draft, version: string) {
           bestExScore: draft.raw?.bestExScore ?? null,
           judge: draft.raw?.judge ?? null,
           missCount: num(counts.missCount),
-          fast: num(counts.fast),
-          slow: num(counts.slow),
+          fast: null,
+          slow: null,
           bestMissCount: draft.raw?.bestMissCount ?? null,
           clearType: draft.raw?.clearType ?? null,
           bestClearType: draft.raw?.bestClearType ?? null,
@@ -92,10 +95,10 @@ export function useResultEditor(draft: Draft, version: string) {
       setExText("");
       setManualEx(true);
     },
-    /** 使用オプション（読み取り、または手で選んだもの）。分からなければ null */
+    /** 使用オプション（読み取り、または手で選んだもの）。読めなければ OFF */
     useOption,
-    setUseOption: (value: string | null) => setOptionPick({ value }),
-    /** ミスカウント・FAST・SLOW の入力（数字の文字列） */
+    setUseOption: (value: string) => setOptionPick({ value }),
+    /** ミスカウントの入力（数字の文字列） */
     counts,
     setCount: (key: CountKey, text: string) => setCounts((c) => ({ ...c, [key]: text.replace(/\D/g, "").slice(0, 4) })),
     record,

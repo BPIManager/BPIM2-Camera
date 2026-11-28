@@ -26,6 +26,8 @@ export interface TrainingLabel {
   useOptionImage?: string;
   fastSlowImage?: string;
   missCountImage?: string;
+  /** 撮影した写真の全体（R2 へ送ったときだけ。zip には入れない） */
+  fullImage?: string;
   /** ユーザーが確定した値（結果画面で入力・選択したもの）。分からなければ null */
   useOption: string | null;
   missCount: number | null;
@@ -36,7 +38,7 @@ export interface TrainingLabel {
 }
 
 /** 正解ラベル。画像のパスは、zip や R2 のなかでの名前を呼び出し側が決める */
-export type LabelImages = Pick<TrainingLabel, "scoreImage" | "titleImage" | "judgeImage" | "useOptionImage" | "fastSlowImage" | "missCountImage">;
+export type LabelImages = Pick<TrainingLabel, "scoreImage" | "titleImage" | "judgeImage" | "useOptionImage" | "fastSlowImage" | "missCountImage" | "fullImage">;
 
 export function sampleLabel(s: TrainingSample, images: LabelImages): TrainingLabel {
   return {
@@ -72,7 +74,7 @@ export const EXTRA_IMAGES = [
 ] as const;
 
 /**
- * 学習サンプルを zip にまとめる。画像は枠で切り出したスコア部・曲名帯・判定表だけ（全体画像や位置情報は含めない）。
+ * 学習サンプルを zip にまとめる。画像は枠で切り出した欄だけ（写真の全体は R2 へ送るだけで、zip には入れない）。
  * labels.json に正解ラベルを入れる。
  */
 export async function buildTrainingZip(samples: readonly TrainingSample[]): Promise<{ blob: Blob; labels: TrainingLabel[] }> {

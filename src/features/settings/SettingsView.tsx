@@ -118,7 +118,7 @@ export default function SettingsView({ settings, update, viewSize, installable, 
           onCheckedChange={(v) => update({ shareImage: v ? "photo" : "card" })}
         />
       </Row>
-      <Row id="stats" label="統計データの送信" hint="匿名化した画面画像と読み取り結果を精度改善に使います">
+      <Row id="stats" label="統計データの送信" hint="撮影した写真と読み取り結果を精度改善に使います">
         <Switch id="stats" checked={settings.statsConsent === true} onCheckedChange={(v) => update({ statsConsent: v })} />
       </Row>
       <Row id="stats-img" label="統計データに画像を含める">

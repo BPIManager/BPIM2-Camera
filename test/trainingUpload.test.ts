@@ -64,6 +64,14 @@ describe("署名付き URL を発行する Worker", () => {
     expect(uploads.find((u) => u.name === "missCount")?.url).toContain(`/sample-0001/missCount.jpg?`);
   });
 
+  it("撮影した写真の全体も受け付ける（切り出しより大きい上限）", async () => {
+    const res = await handle(req({ ...good, files: [...good.files, { name: "full", size: 1_500_000 }] }), env);
+    expect(res.status).toBe(200);
+    const { uploads } = (await res.json()) as { uploads: { name: string; url: string }[] };
+    expect(uploads.find((u) => u.name === "full")?.url).toContain(`/sample-0001/full.jpg?`);
+    expect((await handle(req({ ...good, files: [...good.files, { name: "full", size: 3_000_000 }] }), env)).status).toBe(400);
+  });
+
   it.each([
     ["パスを抜ける id", { ...good, id: "../../etc" }],
     ["未知のファイル名", { ...good, files: [...good.files, { name: "evil", size: 1 }] }],
@@ -139,6 +147,33 @@ describe("flushSamples", () => {
     const labelsPut = f.mock.calls.find((c) => String(c[0]).endsWith("/labels"));
     const labels = JSON.parse(await (labelsPut?.[1]?.body as Blob).text());
     expect(labels).toMatchObject({ useOption: "RANDOM", missCount: 4, fast: 65, slow: 119, useOptionImage: "useOption.jpg", missCountImage: "missCount.jpg" });
+  });
+
+  it("撮影した写真の全体も送る（labels に full.jpg と書く）", async () => {
+    await saveSample({ ...sample("sample-0001"), fullImage: new Blob([new Uint8Array([7, 7])], { type: "image/jpeg" }) });
+    const f = fakeFetch();
+    expect(await flushSamples(opts(f as unknown as typeof fetch))).toEqual({ uploaded: 1, failed: 0 });
+    expect(JSON.parse(String(f.mock.calls[0]?.[1]?.body)).files.map((x: { name: string }) => x.name)).toEqual(["score", "title", "full", "labels"]);
+    const labelsPut = f.mock.calls.find((c) => String(c[0]).endsWith("/labels"));
+    expect(JSON.parse(await (labelsPut?.[1]?.body as Blob).text())).toMatchObject({ fullImage: "full.jpg" });
+    // 送れたら端末からは消し、送った印だけ残す
+    const [s] = await listSamples();
+    expect(s?.fullImage).toBeUndefined();
+    expect(s?.fullImageUploaded).toBe(true);
+    // 確定して送り直すときは、写真は送らず、labels には名前を書く
+    await confirmSample("sample-0001", { chart: record().chart, exScore: 1796, autoConfirmed: false, correctedFields: [] });
+    f.mockClear();
+    expect(await flushSamples(opts(f as unknown as typeof fetch))).toEqual({ uploaded: 1, failed: 0 });
+    expect(JSON.parse(String(f.mock.calls[0]?.[1]?.body)).files.map((x: { name: string }) => x.name)).toEqual(["score", "title", "labels"]);
+    const again = f.mock.calls.find((c) => String(c[0]).endsWith("/labels"));
+    expect(JSON.parse(await (again?.[1]?.body as Blob).text())).toMatchObject({ fullImage: "full.jpg", confirmed: true });
+  });
+
+  it("画像を含めない設定なら、写真の全体も送らない", async () => {
+    await saveSample({ ...sample("sample-0001"), fullImage: new Blob([new Uint8Array([7])], { type: "image/jpeg" }) });
+    const f = fakeFetch();
+    await flushSamples({ ...opts(f as unknown as typeof fetch), includeImage: false });
+    expect(JSON.parse(String(f.mock.calls[0]?.[1]?.body)).files.map((x: { name: string }) => x.name)).toEqual(["labels"]);
   });
 
   it("送信先の Worker が古く、ほかの欄の画像を断られたら、それを除いて送り直す", async () => {

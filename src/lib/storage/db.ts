@@ -26,6 +26,10 @@ export interface TrainingSample {
   judgeCrop?: Blob;
   /** パネルの中のほかの欄の切り出し（使用オプション・FAST/SLOW・ミスカウントの読み取りの学習に使う）。写っていなければない */
   extraCrops?: { useOption?: Blob; fastSlow?: Blob; missCount?: Blob };
+  /** 撮影した写真の全体（縮小し、EXIF を落とした JPEG）。FAST/SLOW などの学習に使う。古いサンプルにはない */
+  fullImage?: Blob;
+  /** 写真の全体を送り終えたか。大きいので、送れたら端末からは消し（fullImage をなくし）、この印だけ残す */
+  fullImageUploaded?: boolean;
   /** ユーザーが確定した、使用オプション・ミスカウント・FAST・SLOW（正解ラベル。分からなければ null） */
   useOption?: string | null;
   missCount?: number | null;
