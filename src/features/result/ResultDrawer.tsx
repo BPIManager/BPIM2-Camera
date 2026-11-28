@@ -28,17 +28,19 @@ import { REFERENCE_VERSION } from "@/lib/bpi/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBpim2Profile } from "@/hooks/useBpim2Profile";
 import { useBpimSync } from "@/hooks/useBpimSync";
+import { useRemote } from "@/hooks/useRemote";
+import { formatDelta, formatPt, headlinePt, useBeatSeekerPreview } from "./BeatSeekerPreview";
 import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import {
   syncTargetLabel,
   syncVersionOf,
   type SyncTarget,
 } from "@/lib/bpi/syncTarget";
-import { useRemote } from "@/hooks/useRemote";
 import {
   fetchHistory,
   personalBestDiff,
   personalBestEntry,
+  previewScore,
   type SelfInfo,
 } from "@/lib/bpi/songData";
 import { saveResult } from "@/lib/storage/history";
@@ -111,6 +113,31 @@ export default function ResultDrawer({
     // 使用オプションとミスカウントも送る。ミスカウントが分からなければ、BPIM2 は最新の記録の値を引き継ぐ
     { useOption: ed.record?.useOption ?? null, missCount: ed.record?.missCount ?? null },
   );
+
+  // 保存した場合の総合BPIの変動（保存しない）。BPI の下に出す。☆12 のときだけ（総合BPIは☆12の記録から算出する）。入力のたびに呼ばないよう、少し待つ
+  const previewKey =
+    user && ed.record && ed.record.chart.level === 12
+      ? `bpim-preview:${user.uid}:${ed.record.chart.songId}:${syncVersionOf(syncTarget)}:${ed.record.exScore}:${ed.record.useOption ?? ""}:${ed.record.missCount ?? ""}`
+      : null;
+  const bpimPreview = useRemote(
+    previewKey,
+    () =>
+      previewScore(user!.uid, ed.record!.chart, ed.record!.exScore, syncVersionOf(syncTarget), {
+        useOption: ed.record!.useOption ?? null,
+        missCount: ed.record!.missCount ?? null,
+      }),
+    600,
+  );
+  const totalDelta = bpimPreview.data?.totalBpi?.delta ?? null;
+  const totalChange = bpimPreview.data?.totalBpi;
+
+  // beat-seeker に登録した場合の変動（保存しない）。連携していれば、3 列目（推定順位）をこの楽曲の新しい PT にする
+  const beatSeeker = useBeatSeekerPreview(ed.record, syncTarget);
+  const headline = beatSeeker.kind === "ok" && ed.record ? headlinePt(beatSeeker.preview, ed.record.chart.level) : null;
+  // 取得に失敗したときも、欄は PT のまま（「—」と理由）にする。推定順位に戻ると、連携が効いていないように見えるため
+  const showPt = beatSeeker.kind === "loading" || beatSeeker.kind === "failed" || headline !== null;
+  // 確かめている間の見出し。☆11 以上は BEAT-PT、☆10 以下は Rate-PT
+  const ptLabel = headline?.label ?? ((ed.record?.chart.level ?? 12) >= 11 ? "BEAT-PT" : "Rate-PT");
 
   const commit = async () => {
     if (!ed.record) return;
@@ -302,15 +329,50 @@ export default function ResultDrawer({
                   )}
                 </Stat>
                 {/* スコアを直したら、BPI と順位は再計算が済むまでスケルトンにする */}
-                <Stat label="BPI" muted={!ed.bpiLoading && !bpiIsNumber}>
+                <Stat
+                  label="BPI"
+                  muted={!ed.bpiLoading && !bpiIsNumber}
+                  sub={
+                    previewKey === null ? undefined : bpimPreview.loading || ed.bpiLoading ? (
+                      <Skeleton className="h-3 w-16" />
+                    ) : totalDelta === null ? null : (
+                      <span
+                        className={cn(totalDelta > 0 ? "text-success" : "text-muted-foreground")}
+                        title={`総合BPI ${totalChange?.before ?? "—"} → ${totalChange?.after ?? "—"}`}
+                      >
+                        総合 {totalDelta > 0 ? `+${totalDelta.toFixed(2)}` : totalDelta < 0 ? `−${(-totalDelta).toFixed(2)}` : "±0"}
+                      </span>
+                    )
+                  }
+                >
                   {ed.bpiLoading ? <Skeleton className="h-7 w-20" /> : bpiText}
                 </Stat>
-                <Stat
-                  label="推定順位"
-                  muted={!ed.bpiLoading && rankText === "—"}
-                >
-                  {ed.bpiLoading ? <Skeleton className="h-7 w-16" /> : rankText}
-                </Stat>
+                {showPt ? (
+                  <Stat
+                    label={ptLabel}
+                    muted={headline === null}
+                    sub={
+                      beatSeeker.kind === "loading" ? (
+                        <Skeleton className="h-3 w-16" />
+                      ) : headline === null ? (
+                        <span className="text-warning">取得できず（詳細）</span>
+                      ) : headline.totalDelta === null ? null : (
+                        <span className={cn(headline.totalDelta > 0 ? "text-success" : "text-muted-foreground")}>
+                          総合 {formatDelta(headline.totalDelta)}
+                        </span>
+                      )
+                    }
+                  >
+                    {beatSeeker.kind === "loading" ? <Skeleton className="h-7 w-20" /> : headline === null ? "—" : formatPt(headline.value)}
+                  </Stat>
+                ) : (
+                  <Stat
+                    label="推定順位"
+                    muted={!ed.bpiLoading && rankText === "—"}
+                  >
+                    {ed.bpiLoading ? <Skeleton className="h-7 w-16" /> : rankText}
+                  </Stat>
+                )}
               </div>
               {!ed.bpiLoading &&
                 (ed.record?.bpiStatus === "pending" ||
@@ -352,6 +414,7 @@ export default function ResultDrawer({
               history={history}
               best={best}
               arenaRank={profile?.arenaRank ?? null}
+              beatSeeker={beatSeeker}
             />
           )}
         </div>
@@ -443,11 +506,14 @@ function Stat({
   label,
   htmlFor,
   muted,
+  sub,
   children,
 }: {
   label: string;
   htmlFor?: string;
   muted?: boolean;
+  /** 値の下に小さく出す補足（出さないときは undefined。出す予定で、まだなければ null にして、高さだけ取る） */
+  sub?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -466,6 +532,7 @@ function Stat({
       >
         {children}
       </div>
+      {sub !== undefined && <div className="flex h-4 items-center text-xs leading-none font-normal">{sub}</div>}
     </div>
   );
 }

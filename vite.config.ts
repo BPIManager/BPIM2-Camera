@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vitest/config";
-import type { Plugin } from "vite";
+import type { Plugin, ProxyOptions } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
@@ -38,8 +38,17 @@ const PROXY = {
  * - /beat-seeker-api: beat-seeker の外部連携 API。開発サーバーのオリジン（localhost・tailscale）は CORS の許可リストにないため。
  *   本番のビルドは、ブラウザから beat-seeker を直接呼ぶ（トークンを自分のサーバーに通さない。src/lib/beatSeeker/client.ts）
  */
-const DEV_PROXY = {
-  "/beat-seeker-api": { target: "https://beat-seeker.onrender.com", changeOrigin: true, rewrite: (p: string) => p.replace(/^\/beat-seeker-api/, "") },
+const DEV_PROXY: Record<string, ProxyOptions> = {
+  "/beat-seeker-api": {
+    target: "https://beat-seeker.onrender.com",
+    changeOrigin: true,
+    rewrite: (p: string) => p.replace(/^\/beat-seeker-api/, ""),
+    // ブラウザは POST に Origin（開発サーバーのオリジン）を付ける。beat-seeker は許可リストにない Origin を 403（Invalid CORS request）にするので、
+    // 中継では外して送る（GET の /me は Origin が付かないので通っていた）。認証はトークンで行う
+    configure: (proxy) => {
+      proxy.on("proxyReq", (proxyReq) => proxyReq.removeHeader("origin"));
+    },
+  },
 };
 
 /** 開発・プレビューで隔離ヘッダーを付ける。サインイン用ページ（signin.html と、Firebase の中継 /__/auth/）は除く（Firebase のリダイレクトが阻まれるため） */

@@ -6,11 +6,21 @@ import { ARENA_RANKS, REF_STORAGE_KEY, defaultRefChoice, isRefChoice, refLineFor
 import { fetchRivalRanking, type HistoryEntry, type SelfInfo } from "@/lib/bpi/songData";
 import type { ResultRecord } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
+import BeatSeekerTab from "./BeatSeekerTab";
+import type { BeatSeekerPreviewState } from "./BeatSeekerPreview";
 import BpiChart from "./BpiChart";
 import HistoryPanel from "./HistoryPanel";
 import RankingPanel from "./RankingPanel";
 
+/** 上のタブ。BPI（チャート・履歴・ランキング）と beat-seeker */
+type Main = "bpi" | "beat-seeker";
+/** BPI の下のタブ */
 type Tab = "chart" | "history" | "ranking";
+
+const MAINS: { id: Main; label: string }[] = [
+  { id: "bpi", label: "BPI" },
+  { id: "beat-seeker", label: "beat-seeker" },
+];
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "chart", label: "チャート" },
@@ -28,44 +38,72 @@ interface Props {
   best: number | null;
   /** 自分のアリーナランク。チャートの参照線の既定に使う */
   arenaRank: string | null;
+  /** beat-seeker に登録した場合の変動（保存しない） */
+  beatSeeker: BeatSeekerPreviewState;
 }
 
 /**
- * 曲が確定したときの、チャート・履歴・ランキングの 3 タブ。
+ * 曲が確定したときの、BPI（チャート・履歴・ランキング）と beat-seeker の 2 タブ。
  * 残りの高さいっぱいに広がり、タブの中身だけがスクロールする（シート全体はスクロールしない）
  */
-export default function SongTabs({ record, outcome, self, history, best, arenaRank }: Props) {
+export default function SongTabs({ record, outcome, self, history, best, arenaRank, beatSeeker }: Props) {
+  const [main, setMain] = useState<Main>("bpi");
   const [tab, setTab] = useState<Tab>("chart");
+  const panelId = main === "bpi" ? `panel-${tab}` : "panel-beat-seeker";
+  const scrolls = main === "beat-seeker" || tab === "chart";
   return (
     <section className="flex min-h-0 flex-1 flex-col">
-      <div role="tablist" aria-label="曲の詳細" className="grid shrink-0 grid-cols-3 border-b border-border px-4">
-        {TABS.map((t) => (
+      <div role="tablist" aria-label="曲の詳細" className="grid shrink-0 grid-cols-2 border-b border-border px-4">
+        {MAINS.map((m) => (
           <button
-            key={t.id}
+            key={m.id}
             type="button"
             role="tab"
-            id={`tab-${t.id}`}
-            aria-selected={tab === t.id}
-            aria-controls={`panel-${t.id}`}
-            onClick={() => setTab(t.id)}
+            id={`main-${m.id}`}
+            aria-selected={main === m.id}
+            aria-controls={m.id === "bpi" ? undefined : "panel-beat-seeker"}
+            onClick={() => setMain(m.id)}
             className={cn(
               "-mb-px border-b-2 py-2 text-sm transition-colors",
-              tab === t.id ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground",
+              main === m.id ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground",
             )}
           >
-            {t.label}
+            {m.label}
           </button>
         ))}
       </div>
+      {/* BPI の下のタブ。小さな切り替えにして、上のタブと見分けがつくようにする */}
+      {main === "bpi" && (
+        <div role="tablist" aria-label="BPI の詳細" className="mx-4 mt-2 grid shrink-0 grid-cols-3 gap-0.5 rounded-md bg-muted p-0.5">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`tab-${t.id}`}
+              aria-selected={tab === t.id}
+              aria-controls={`panel-${t.id}`}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "rounded py-1 text-xs transition-colors",
+                tab === t.id ? "bg-card font-medium text-foreground shadow-sm" : "text-muted-foreground",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         role="tabpanel"
-        id={`panel-${tab}`}
-        aria-labelledby={`tab-${tab}`}
-        className={cn("relative min-h-0 flex-1 px-3 pt-2", tab === "chart" && "overflow-y-auto overscroll-contain")}
+        id={panelId}
+        aria-labelledby={main === "bpi" ? `tab-${tab}` : "main-beat-seeker"}
+        className={cn("relative min-h-0 flex-1 px-3 pt-2", scrolls && "overflow-y-auto overscroll-contain")}
       >
-        {tab === "chart" && <ChartTab record={record} outcome={outcome} best={best} self={self} arenaRank={arenaRank} />}
-        {tab === "history" && <HistoryPanel signedIn={self !== null} history={history} />}
-        {tab === "ranking" && <RankingPanel self={self} chart={record.chart} exScore={record.exScore} bpi={record.bpi} />}
+        {main === "beat-seeker" && <BeatSeekerTab state={beatSeeker} />}
+        {main === "bpi" && tab === "chart" && <ChartTab record={record} outcome={outcome} best={best} self={self} arenaRank={arenaRank} />}
+        {main === "bpi" && tab === "history" && <HistoryPanel signedIn={self !== null} history={history} />}
+        {main === "bpi" && tab === "ranking" && <RankingPanel self={self} chart={record.chart} exScore={record.exScore} bpi={record.bpi} />}
       </div>
     </section>
   );
