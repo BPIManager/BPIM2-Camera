@@ -316,13 +316,7 @@ function StatsPage({ settings, update }: PageProps) {
   );
 }
 
-type PageKey =
-  | "account"
-  | "bpim2"
-  | "beatSeeker"
-  | "camera"
-  | "ocr"
-  | "stats";
+type PageKey = "account" | "bpim2" | "beatSeeker" | "camera" | "ocr" | "stats";
 
 interface PageInfo {
   key: PageKey;
@@ -352,7 +346,7 @@ const PAGES: readonly PageInfo[] = [
   {
     key: "ocr",
     title: "読み取り設定",
-    hint: "読み取りの処理（GPU / CPU）・取得済みのモデル",
+    hint: "読み取り方式・モデル管理",
     icon: Cpu,
     parent: null,
   },
