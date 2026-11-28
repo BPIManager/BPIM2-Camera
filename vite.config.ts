@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vitest/config";
@@ -5,6 +6,20 @@ import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
+
+/**
+ * ビルドした版の情報（設定画面の一番下に出す）。最後のコミットのハッシュと日時、コミットしていない変更があるか。
+ * git が使えない環境でビルドするときは、CI の環境変数（GITHUB_SHA など）から取り、なければ unknown
+ */
+function appVersion(): { commit: string; date: string | null; dirty: boolean } {
+  const git = (args: string) => execSync(`git ${args}`, { cwd: import.meta.dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  try {
+    return { commit: git("rev-parse --short HEAD"), date: git("log -1 --format=%cI"), dirty: git("status --porcelain --untracked-files=no") !== "" };
+  } catch {
+    const sha = process.env.GITHUB_SHA ?? process.env.CF_PAGES_COMMIT_SHA ?? process.env.WORKERS_CI_COMMIT_SHA;
+    return { commit: sha ? sha.slice(0, 7) : "unknown", date: null, dirty: false };
+  }
+}
 
 const ISOLATION_HEADERS = { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp" };
 
@@ -96,6 +111,7 @@ function ortFlavor(mode: "serve" | "build", worker = false): Plugin {
 }
 
 export default defineConfig(({ command }) => ({
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
   plugins: [
     ortFlavor(command),
     isolation(),

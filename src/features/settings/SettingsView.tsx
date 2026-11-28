@@ -7,6 +7,7 @@ import AccountSection from "./AccountSection";
 import CameraPicker from "@/components/camera-picker";
 import DebugSection from "./DebugSection";
 import LicensesSection from "./LicensesSection";
+import VersionInfo from "./VersionInfo";
 import OcrSection from "./OcrSection";
 import AssetsSection from "./AssetsSection";
 import type { OcrBackend } from "@/lib/recognition/ocrSetup";
@@ -175,6 +176,7 @@ export default function SettingsView({ settings, update, viewSize, installable, 
       </Row>
       <LicensesSection />
       {settings.debugMode && <DebugSection />}
+      <VersionInfo />
       <ConfirmDialog
         open={confirm === "samples"}
         onClose={() => setConfirm(null)}
