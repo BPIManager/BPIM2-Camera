@@ -146,5 +146,8 @@ export function rawFromPaddle(r: PaddleReadings, master: readonly SongMasterEntr
   const scoreSet = new Set(scoreReadings.flat().map(Number).filter((n) => Number.isInteger(n)));
   const judge = r.judge ? judgeFromReads(r.judge, scoreSet) : undefined;
   const extras = judge && (judge.pg !== undefined || judge.gr !== undefined) ? { judge } : undefined;
-  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true, crossGroupValues(r.score, r.scoreGroups), mergeReads((r.judge ?? []).flatMap((lines) => parseJudgeReads(lines))), evidenceScoreValues(r.score), r.title.map((l) => l.text));
+  // スコア欄の読みの値ごとの、最も高い確度
+  const scoreConfidence = new Map<number, number>();
+  for (const lines of r.score) for (const l of lines) for (const run of digitRuns([l.text])) for (const c of scoreCandidates(run)) scoreConfidence.set(Number(c), Math.max(scoreConfidence.get(Number(c)) ?? 0, l.confidence));
+  return rawFromRegions(titleTokens, scoreReadings, master, bestTitleLine(r.title, master) ?? undefined, extras, true, crossGroupValues(r.score, r.scoreGroups), mergeReads((r.judge ?? []).flatMap((lines) => parseJudgeReads(lines))), evidenceScoreValues(r.score), r.title.map((l) => l.text), scoreConfidence);
 }

@@ -30,6 +30,8 @@ export function rawFromRegions(
   strongValues: readonly number[] = [],
   /** 曲名の枠に写っていた文字の行（アーティスト名の候補）。曲データのアーティスト名との照合に使う */
   artistTexts: readonly string[] = [],
+  /** スコア欄の読みの値 → 最も高い確度（0〜100）。判定表から作った値で上書きしてよいかの判断に使う */
+  scoreConfidence: ReadonlyMap<number, number> = new Map(),
 ): RawResult | null {
   const hints = parseChartHints(titleTokens);
   const titleText = japaneseTitle?.trim() || guessTitle(titleTokens);
@@ -65,10 +67,13 @@ export function rawFromRegions(
           ...new Set([
             ...crossValues.filter((v) => v >= 100 && v <= notes * 2),
             ...strongValues.filter((v) => v >= 100 && v <= notes * 2 && consistentWithPg(v, notes, judgePool)),
-            ...approximatePairs(judgePool, notes, scoreNumbers),
+            ...approximatePairs(judgePool, notes, scoreNumbers, scoreConfidence, scoreReadings),
           ]),
         ];
-  const exValue = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? (fallback.length === 1 ? fallback[0] : null) : vote.value;
+  const decided = consensus?.status === "confirmed" ? consensus.value : requireConsensus ? (fallback.length === 1 ? fallback[0] : null) : vote.value;
+  // 歯止め: スコア欄が、ある値を何度も確かに読んでいる（strongValues）のに、別の値に決まりそうなら決めない。
+  // 判定表の誤読から作った値が、確かなスコア欄の読みに競り勝つのを防ぐ（#3）
+  const exValue = decided !== null && strongValues.length === 1 && strongValues[0] !== decided ? null : decided;
   const exCandidates = exValue !== null ? [] : [...new Set([...(consensus?.ranked.map((c) => c.value) ?? []), ...vote.candidates])].slice(0, 3);
   if (hints.difficulty === null && hints.notes === null && titleText === null && vote.candidates.length === 0) return null;
 
@@ -101,12 +106,27 @@ export function chartResolvedByHints(titleTokens: readonly OcrToken[], master: r
   return matchChart(master, { ...hints, titleText: null }).confident;
 }
 
+/** スコア欄の読みがこの確度以上なら、判定表から作った 1 桁違いの値で上書きしない（判定表の誤読のほうを疑う） */
+export const TRUSTED_SCORE_CONFIDENCE = 95;
+
 /**
  * 判定表の枠で読めた数字から、PG・GR の組み合わせの EX（PG×2＋GR）を作り、スコア欄の読みと 1 桁違い以内のものを返す。
  * 偶然の一致を避けるため、PG＋GR はノーツ数の 90〜100%、PG > GR を条件にする（実際のリザルトでは、
  * GOOD 以下はノーツ数の 1 割に満たないことがほとんど）。
+ * 1 桁違いの相手のスコア欄の読みが十分に確か（TRUSTED_SCORE_CONFIDENCE 以上）なら、その値は採らない。
+ * 判定表の数字は小さく、スコア欄より読み違えやすい（実機で 2829（確度 98）を 2827、2338 を 2238 と誤確定した。#3）
  */
-export function approximatePairs(pool: readonly JudgeRead[], notes: number, scores: readonly number[]): number[] {
+export function approximatePairs(
+  pool: readonly JudgeRead[],
+  notes: number,
+  scores: readonly number[],
+  scoreConfidence: ReadonlyMap<number, number> = new Map(),
+  /**
+   * スコア欄の読み（前処理ごと）。3 回以上読んでいるのに、1 桁違い以内の値が 1 回の読みにしか出ていなければ採らない
+   * （読みがばらばらなときの 1 回だけの読みは、誤読と区別できない。読みが 1〜2 回なら、従来どおり 1 回でも採る）
+   */
+  readings?: readonly (readonly string[])[],
+): number[] {
   const out = new Set<number>();
   for (const pgRead of pool) {
     for (const grRead of pool) {
@@ -115,7 +135,19 @@ export function approximatePairs(pool: readonly JudgeRead[], notes: number, scor
       const sum = pg + gr;
       if (pg < 100 || pg <= gr || !isReliableGr(grRead) || sum > notes || sum < notes * 0.9) continue;
       const ex = pg * 2 + gr;
-      if (scores.some((s) => editDistance(String(s), String(ex)) <= 1)) out.add(ex);
+      const near = scores.filter((s) => editDistance(String(s), String(ex)) <= 1);
+      if (near.length === 0) continue;
+      // スコア欄が別の値を確かに読んでいれば、判定表の誤読とみなす
+      if (near.some((s) => s !== ex && (scoreConfidence.get(s) ?? 0) >= TRUSTED_SCORE_CONFIDENCE)) continue;
+      if (readings && readings.filter((rd) => rd.length > 0).length >= 3 && readings.filter((rd) => rd.some((v) => editDistance(v, String(ex)) <= 1)).length < 2) continue;
+      // 1 桁違いのスコア欄の値が、2 回以上の読みで同じに読めていれば、判定表の値ではなく、その値を採る
+      // （判定表は、その値を 1 桁違いで裏付けている。060306: スコア欄 3953 を 2 回・判定表の GR の誤読で 3952）
+      const repeated = readings ? near.filter((s) => s !== ex && String(s).length === String(ex).length && readings.filter((rd) => rd.includes(String(s))).length >= 2) : [];
+      if (repeated.length === 1) {
+        out.add(repeated[0]!);
+        continue;
+      }
+      out.add(ex);
     }
   }
   return [...out];
