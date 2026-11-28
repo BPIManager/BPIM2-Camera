@@ -1,11 +1,11 @@
-import { Camera, History, Settings as SettingsIcon } from "lucide-react";
+import { Camera, ChartColumn, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type Tab = "camera" | "history" | "settings";
 
 export const TABS: readonly { id: Tab; label: string; Icon: typeof Camera }[] = [
   { id: "camera", label: "撮影", Icon: Camera },
-  { id: "history", label: "履歴", Icon: History },
+  { id: "history", label: "分析", Icon: ChartColumn },
   { id: "settings", label: "設定", Icon: SettingsIcon },
 ];
 

@@ -13,7 +13,8 @@
     "eval": "vitest run --config vitest.eval.config.ts",
     "train:digits": "vitest run --config vitest.eval.config.ts train-digits",
     "models:fetch": "node scripts/fetch-models.mjs",
-    "licenses:gen": "node scripts/gen-licenses.mjs"
+    "licenses:gen": "node scripts/gen-licenses.mjs",
+    "radar:gen": "node scripts/gen-radar.mjs"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.17",
