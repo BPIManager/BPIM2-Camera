@@ -1,4 +1,5 @@
 import { DEFAULT_SYNC_TARGET, isSyncTarget, type SyncTarget } from "@/lib/bpi/syncTarget";
+import { DEFAULT_RESULT_TAB, isResultTab, type ResultTab } from "@/lib/result/resultTab";
 import type { OcrBenchmarkResult } from "@/lib/recognition/benchmark";
 import type { OcrBackend } from "@/lib/recognition/ocrSetup";
 import { isValidRect } from "@/lib/vision/guideEdit";
@@ -19,6 +20,8 @@ export interface Settings {
   saveToCameraRoll: boolean;
   /** BPIM2 にスコアを保存する先の既定（最新バージョン / INFINITAS）。結果画面で、1 件ごとに変えられる */
   syncTarget: SyncTarget;
+  /** 結果画面を開いたときのタブ。beat-seeker を選んでいても、連携していなければ BPI を開く */
+  resultTab: ResultTab;
   shareImage: "photo" | "card";
   shareTemplate: string;
   statsConsent: boolean | null;
@@ -50,6 +53,7 @@ export function defaultSettings(): Settings {
     debugMode: false,
     saveToCameraRoll: true,
     syncTarget: DEFAULT_SYNC_TARGET,
+    resultTab: DEFAULT_RESULT_TAB,
     shareImage: "photo",
     shareTemplate: "標準",
     statsConsent: null,
@@ -78,7 +82,7 @@ export function loadSettings(storage: Pick<Storage, "getItem" | "setItem"> = loc
       const aspect = typeof parsed.layoutAspect === "number" && parsed.layoutAspect > 0.2 && parsed.layoutAspect < 5 ? parsed.layoutAspect : null;
       // 縦横比が分からない枠は、旧来どおり表示領域全体への割合として扱う
       // 壊れた値は既定に戻す
-      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET, cameraId: typeof parsed.cameraId === "string" && parsed.cameraId ? parsed.cameraId : null, ocrBackend: parsed.ocrBackend === "gpu" || parsed.ocrBackend === "cpu" ? parsed.ocrBackend : null, playSide: playSide === "1P" || playSide === "2P" ? playSide : parsed.playSide, playSideChosen: parsed.playSideChosen === true || playSide === "1P" || playSide === "2P" };
+      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET, resultTab: isResultTab(parsed.resultTab) ? parsed.resultTab : DEFAULT_RESULT_TAB, cameraId: typeof parsed.cameraId === "string" && parsed.cameraId ? parsed.cameraId : null, ocrBackend: parsed.ocrBackend === "gpu" || parsed.ocrBackend === "cpu" ? parsed.ocrBackend : null, playSide: playSide === "1P" || playSide === "2P" ? playSide : parsed.playSide, playSideChosen: parsed.playSideChosen === true || playSide === "1P" || playSide === "2P" };
     }
   } catch {
     /* 壊れた値や private モードでは既定値で動かす */

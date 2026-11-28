@@ -415,6 +415,7 @@ export default function ResultDrawer({
               best={best}
               arenaRank={profile?.arenaRank ?? null}
               beatSeeker={beatSeeker}
+              defaultTab={settings.resultTab}
             />
           )}
         </div>

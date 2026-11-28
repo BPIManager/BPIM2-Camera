@@ -5,6 +5,7 @@ import { REFERENCE_VERSION, type BpiOutcome } from "@/lib/bpi/client";
 import { ARENA_RANKS, REF_STORAGE_KEY, defaultRefChoice, isRefChoice, refLineFor } from "@/lib/bpi/refLine";
 import { fetchRivalRanking, type HistoryEntry, type SelfInfo } from "@/lib/bpi/songData";
 import type { ResultRecord } from "@/lib/domain/types";
+import { RESULT_TABS, initialResultTab, type ResultTab } from "@/lib/result/resultTab";
 import { cn } from "@/lib/utils";
 import BeatSeekerTab from "./BeatSeekerTab";
 import type { BeatSeekerPreviewState } from "./BeatSeekerPreview";
@@ -12,15 +13,8 @@ import BpiChart from "./BpiChart";
 import HistoryPanel from "./HistoryPanel";
 import RankingPanel from "./RankingPanel";
 
-/** 上のタブ。BPI（チャート・履歴・ランキング）と beat-seeker */
-type Main = "bpi" | "beat-seeker";
 /** BPI の下のタブ */
 type Tab = "chart" | "history" | "ranking";
-
-const MAINS: { id: Main; label: string }[] = [
-  { id: "bpi", label: "BPI" },
-  { id: "beat-seeker", label: "beat-seeker" },
-];
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "chart", label: "チャート" },
@@ -40,21 +34,23 @@ interface Props {
   arenaRank: string | null;
   /** beat-seeker に登録した場合の変動（保存しない） */
   beatSeeker: BeatSeekerPreviewState;
+  /** 最初に開く上のタブ（設定）。beat-seeker を選んでいても、連携していなければ BPI を開く */
+  defaultTab: ResultTab;
 }
 
 /**
  * 曲が確定したときの、BPI（チャート・履歴・ランキング）と beat-seeker の 2 タブ。
  * 残りの高さいっぱいに広がり、タブの中身だけがスクロールする（シート全体はスクロールしない）
  */
-export default function SongTabs({ record, outcome, self, history, best, arenaRank, beatSeeker }: Props) {
-  const [main, setMain] = useState<Main>("bpi");
+export default function SongTabs({ record, outcome, self, history, best, arenaRank, beatSeeker, defaultTab }: Props) {
+  const [main, setMain] = useState<ResultTab>(() => initialResultTab(defaultTab, beatSeeker.kind !== "off"));
   const [tab, setTab] = useState<Tab>("chart");
   const panelId = main === "bpi" ? `panel-${tab}` : "panel-beat-seeker";
   const scrolls = main === "beat-seeker" || tab === "chart";
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <div role="tablist" aria-label="曲の詳細" className="grid shrink-0 grid-cols-2 border-b border-border px-4">
-        {MAINS.map((m) => (
+        {RESULT_TABS.map((m) => (
           <button
             key={m.id}
             type="button"

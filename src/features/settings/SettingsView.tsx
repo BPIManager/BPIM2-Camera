@@ -27,6 +27,7 @@ import type { OcrBackend } from "@/lib/recognition/ocrSetup";
 import ConfirmDialog from "@/components/confirm-dialog";
 import GuideEditor from "./GuideEditor";
 import Label from "@/components/ui/label";
+import ResultTabPicker from "@/components/result-tab-picker";
 import SyncTargetPicker from "@/components/sync-target-picker";
 import Switch from "@/components/ui/switch";
 import { clearHistory } from "@/lib/storage/history";
@@ -197,6 +198,16 @@ function CameraPage({
           onCheckedChange={(v) => update({ saveToCameraRoll: v })}
         />
       </Row>
+      <div className="flex flex-col gap-2 border-b border-border py-3">
+        <Label>結果画面の最初のタブ</Label>
+        <p className="text-xs text-muted-foreground">
+          読み取り結果の下に最初に出すタブです。beat-seeker は、連携していないときは BPI を開きます
+        </p>
+        <ResultTabPicker
+          value={settings.resultTab}
+          onChange={(resultTab) => update({ resultTab })}
+        />
+      </div>
       <Row
         id="share-img"
         label="シェアに写真を添える"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Info, TriangleAlert } from "lucide-react";
 import BrandMark from "@/components/brand-mark";
 import CameraPicker from "@/components/camera-picker";
+import ResultTabPicker from "@/components/result-tab-picker";
 import SyncTargetPicker from "@/components/sync-target-picker";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Avatar from "@/components/ui/avatar";
@@ -391,6 +392,7 @@ export function OptionsStep({
   const [auto, setAuto] = useState(settings.autoCapture);
   const [save, setSave] = useState(settings.saveToCameraRoll);
   const [syncTarget, setSyncTarget] = useState(settings.syncTarget);
+  const [resultTab, setResultTab] = useState(settings.resultTab);
   return (
     <Frame
       title="撮影と保存のしかた"
@@ -399,7 +401,7 @@ export function OptionsStep({
         <Button
           size="lg"
           onClick={() => {
-            update({ autoCapture: auto, saveToCameraRoll: save, syncTarget });
+            update({ autoCapture: auto, saveToCameraRoll: save, syncTarget, resultTab });
             onNext();
           }}
         >
@@ -429,6 +431,13 @@ export function OptionsStep({
             (結果画面で1件ごとに変えることもできます)
           </p>
           <SyncTargetPicker value={syncTarget} onChange={setSyncTarget} />
+        </div>
+        <div className="flex flex-col gap-2 py-3">
+          <Label>結果画面の最初のタブ</Label>
+          <p className="text-xs text-muted-foreground">
+            読み取り結果の下に最初に出すタブを選んでください。beat-seeker は、連携していないときは BPI を開きます。
+          </p>
+          <ResultTabPicker value={resultTab} onChange={setResultTab} />
         </div>
       </div>
     </Frame>
