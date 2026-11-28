@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Camera, ChevronLeft, ChevronRight, Cpu, Package, UserRound, type LucideIcon } from "lucide-react";
+import { BarChart3, Camera, ChevronLeft, ChevronRight, Cpu, Link2, Package, UserRound, type LucideIcon } from "lucide-react";
 import Button from "@/components/ui/button";
 import type { Size } from "@/lib/vision/framing";
 import { GUIDE_LAYOUTS, inferSide, resolveLayout } from "@/lib/vision/guides";
@@ -48,24 +48,32 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint?: 
   );
 }
 
-/** アカウント連携：BPIM2 のアカウント・beat-seeker・同期先 */
-function AccountPage({ settings, update }: PageProps) {
+/** アカウント連携：BPIM2・beat-seeker の各ページへの一覧と、両方に共通の同期先 */
+function AccountPage({ settings, update, onOpen }: PageProps & { onOpen: (key: PageKey) => void }) {
   return (
     <>
-      <AccountSection />
-      <section className="flex flex-col gap-3 border-b border-border py-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-medium">beat-seeker</h2>
-          <p className="text-xs text-muted-foreground">連携すると、読み取ったスコアで BEAT-PT・BEAT-TIER がどう変わるかを確かめ、beat-seeker に登録できます</p>
-        </div>
-        <BeatSeekerLinkPanel />
-      </section>
+      <PageMenu parent="account" onOpen={onOpen} />
       <div className="flex flex-col gap-2 border-b border-border py-3">
-        <Label>BPIM2 の同期先（既定）</Label>
-        <p className="text-xs text-muted-foreground">結果画面の「BPIM2同期」で保存する先です。結果画面では、1 件ごとに変えられます</p>
+        <Label>同期先（既定）</Label>
+        <p className="text-xs text-muted-foreground">結果画面で同期するときに、スコアを保存するバージョンです。結果画面では、1 件ごとに変えられます。beat-seeker は最新バージョンだけに登録できます</p>
         <SyncTargetPicker value={settings.syncTarget} onChange={(syncTarget) => update({ syncTarget })} />
       </div>
     </>
+  );
+}
+
+/** アカウント連携 › BPIM2：アカウント */
+function Bpim2Page() {
+  return <AccountSection />;
+}
+
+/** アカウント連携 › beat-seeker：連携トークン */
+function BeatSeekerPage() {
+  return (
+    <section className="flex flex-col gap-3 py-4">
+      <p className="text-xs text-muted-foreground">連携すると、読み取ったスコアで BEAT-PT・BEAT-TIER がどう変わるかを確かめ、beat-seeker に登録できます</p>
+      <BeatSeekerLinkPanel />
+    </section>
   );
 }
 
@@ -187,33 +195,65 @@ function StatsPage({ settings, update }: PageProps) {
   );
 }
 
-type PageKey = "account" | "camera" | "ocr" | "models" | "stats";
+type PageKey = "account" | "bpim2" | "beatSeeker" | "camera" | "ocr" | "models" | "stats";
 
-const PAGES: readonly { key: PageKey; title: string; hint: string; icon: LucideIcon }[] = [
-  { key: "account", title: "アカウント連携", hint: "BPIM2 のアカウント・beat-seeker・同期先", icon: UserRound },
-  { key: "camera", title: "カメラ設定", hint: "撮影枠・プレーサイド・カメラ・自動撮影・保存と共有", icon: Camera },
-  { key: "ocr", title: "読み取り設定", hint: "読み取りの処理（GPU / CPU）", icon: Cpu },
-  { key: "models", title: "モデル", hint: "取得済みのモデル・削除", icon: Package },
-  { key: "stats", title: "統計データ", hint: "送信の同意・学習データ・端末ID", icon: BarChart3 },
+interface PageInfo {
+  key: PageKey;
+  title: string;
+  hint: string;
+  icon: LucideIcon;
+  /** 親のページ（戻る先）。トップの一覧に出すページは null */
+  parent: PageKey | null;
+}
+
+const PAGES: readonly PageInfo[] = [
+  { key: "account", title: "アカウント連携", hint: "BPIM2・beat-seeker・同期先", icon: UserRound, parent: null },
+  { key: "camera", title: "カメラ設定", hint: "撮影枠・プレーサイド・カメラ・自動撮影・保存と共有", icon: Camera, parent: null },
+  { key: "ocr", title: "読み取り設定", hint: "読み取りの処理（GPU / CPU）", icon: Cpu, parent: null },
+  { key: "models", title: "モデル", hint: "取得済みのモデル・削除", icon: Package, parent: null },
+  { key: "stats", title: "統計データ", hint: "送信の同意・学習データ・端末ID", icon: BarChart3, parent: null },
+  { key: "bpim2", title: "BPIM2", hint: "サインイン・スコアログ", icon: UserRound, parent: "account" },
+  { key: "beatSeeker", title: "beat-seeker", hint: "連携トークン", icon: Link2, parent: "account" },
 ];
 
-/** 設定。トップは各ページへの一覧と、ページに分けるほどでない項目。ページは上の「設定」で戻る */
+/** ページの一覧（押すとそのページを開く） */
+function PageMenu({ parent, onOpen }: { parent: PageKey | null; onOpen: (key: PageKey) => void }) {
+  return (
+    <nav className="flex flex-col">
+      {PAGES.filter((p) => p.parent === parent).map(({ key, title, hint, icon: Icon }) => (
+        <button key={key} type="button" onClick={() => onOpen(key)} className="flex items-center gap-3 border-b border-border py-3 text-left">
+          <Icon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-sm font-medium">{title}</span>
+            <span className="truncate text-xs text-muted-foreground">{hint}</span>
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** 設定。トップは各ページへの一覧と、ページに分けるほどでない項目。ページは上の「‹ 親のページ」で戻る（アカウント連携は、さらに BPIM2・beat-seeker に分ける） */
 export default function SettingsView({ settings, update, viewSize, installable, onOpenInstall, ocrBackend }: Props) {
   const [page, setPage] = useState<PageKey | null>(null);
   const [confirmHistory, setConfirmHistory] = useState(false);
   const current = PAGES.find((p) => p.key === page);
 
   if (current) {
+    const back = current.parent ? PAGES.find((p) => p.key === current.parent) : undefined;
     return (
       <div className="flex h-full flex-col overflow-y-auto px-4 pb-8">
         <div className="sticky top-0 z-10 -mx-4 flex items-center gap-1 border-b border-border bg-background px-2 py-2">
-          <Button variant="ghost" size="sm" onClick={() => setPage(null)} className="gap-0.5 px-2">
+          <Button variant="ghost" size="sm" onClick={() => setPage(current.parent)} className="gap-0.5 px-2">
             <ChevronLeft className="size-4" aria-hidden />
-            設定
+            {back?.title ?? "設定"}
           </Button>
           <h2 className="text-sm font-semibold">{current.title}</h2>
         </div>
-        {current.key === "account" && <AccountPage settings={settings} update={update} />}
+        {current.key === "account" && <AccountPage settings={settings} update={update} onOpen={setPage} />}
+        {current.key === "bpim2" && <Bpim2Page />}
+        {current.key === "beatSeeker" && <BeatSeekerPage />}
         {current.key === "camera" && <CameraPage settings={settings} update={update} viewSize={viewSize} />}
         {current.key === "ocr" && <OcrSection settings={settings} update={update} />}
         {current.key === "models" && <AssetsSection ctx={ocrBackend ? { backend: ocrBackend, autoCapture: settings.autoCapture } : null} />}
@@ -224,18 +264,7 @@ export default function SettingsView({ settings, update, viewSize, installable, 
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 pb-8">
-      <nav className="flex flex-col">
-        {PAGES.map(({ key, title, hint, icon: Icon }) => (
-          <button key={key} type="button" onClick={() => setPage(key)} className="flex items-center gap-3 border-b border-border py-3 text-left">
-            <Icon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-sm font-medium">{title}</span>
-              <span className="truncate text-xs text-muted-foreground">{hint}</span>
-            </span>
-            <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          </button>
-        ))}
-      </nav>
+      <PageMenu parent={null} onOpen={setPage} />
       {installable && (
         <div className="flex items-center justify-between gap-4 border-b border-border py-3">
           <div className="flex min-w-0 flex-col gap-1">
