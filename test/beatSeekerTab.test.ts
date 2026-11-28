@@ -20,31 +20,42 @@ const preview = (over: Partial<BeatSeekerPreview> = {}): BeatSeekerPreview => ({
   ...over,
 });
 
-const render = (state: BeatSeekerPreviewState) => renderToStaticMarkup(createElement(BeatSeekerTab, { state }));
+// ティア名の中のスペースは、折り返さないための特別なスペース（U+00A0）にしているので、照合の前に普通のスペースに戻す
+const render = (state: BeatSeekerPreviewState) => renderToStaticMarkup(createElement(BeatSeekerTab, { state })).replace(/ /g, " ");
 
 describe("beat-seeker のタブ", () => {
-  it("右上に総合 BEAT-PT の差、ティアごとのカード（変動・次の段までの残り・ゲージ）を出す", () => {
+  it("BEAT-TIER と Rate-Tier を縦に 2 段で並べ、総合 PT の差・次の段までの残り・ゲージを出す", () => {
     const html = render({ kind: "ok", preview: preview() });
-    expect(html).toContain("+12.5");
+    expect(html).not.toContain("grid-cols-2");
+    expect(html.indexOf("BEAT-TIER")).toBeLessThan(html.indexOf("Rate-Tier"));
     expect(html).toContain("BEAT-TIER");
     expect(html).toContain("Rate-Tier");
+    expect(html).toContain("+12.5 pt");
     // 16,662.5 は Master II。次は Master III（16,700）まであと 37.5
     expect(html).toContain("Master III");
     expect(html).toContain("37.5");
-    expect(html).toContain("非公式難易度 12.8");
-    expect(html).toContain("BEAT-PT（この譜面）");
+    // 全体の高さいっぱいに広げる
+    expect(html).toContain("h-full");
   });
 
-  it("ティアが上がったときは、前 → 後と「ティアアップ」を出す", () => {
-    const html = render({ kind: "ok", preview: preview({ ratePt: pt(520, 530, ["Veteran II", "Veteran III"]) }) });
-    expect(html).toContain("ティアアップ");
-    expect(html).toContain("Veteran III");
+  it("上の数字の欄（この譜面の PT・総合の差）と重なる内容は出さない。説明や非公式難易度も出さない", () => {
+    const html = render({ kind: "ok", preview: preview() });
+    expect(html).not.toContain("この譜面");
+    expect(html).not.toContain("非公式難易度");
+    expect(html).not.toContain("登録した場合の変動");
+    expect(html).not.toContain("139.51");
+    expect(html).not.toContain("140.2");
+  });
+
+  it("段が上がったときは、「Veteran II → III」と短く出す。ティア名が変わるときは、全部を出す", () => {
+    expect(render({ kind: "ok", preview: preview({ ratePt: pt(520, 530, ["Veteran II", "Veteran III"]) }) })).toContain("Veteran II → III");
+    expect(render({ kind: "ok", preview: preview({ ratePt: pt(695, 730, ["Veteran V", "Commander I"]) }) })).toContain("Veteran V → Commander I");
   });
 
   it("前の記録がない（初めて）でも描ける。最上位（Legend）・最下位（Beginner）も描ける", () => {
     expect(() => render({ kind: "ok", preview: preview({ beatPt: pt(null, 9000, [null, "Beginner"]) }) })).not.toThrow();
     const legend = render({ kind: "ok", preview: preview({ beatPt: pt(18000, 18100, ["Legend", "Legend"]) }) });
-    expect(legend).toContain("最上位のティアです");
+    expect(legend).toContain("最上位のティア");
     const none = render({ kind: "ok", preview: preview({ beatPt: pt(null, null, [null, null]), ratePt: pt(null, null, [null, null]) }) });
     expect(none).toContain("—");
   });

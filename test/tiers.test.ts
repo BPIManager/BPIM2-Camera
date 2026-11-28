@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BEAT_TIERS, RATE_TIERS, locate, roman } from "@/lib/beatSeeker/tiers";
+import { BEAT_TIERS, RATE_TIERS, compactTierChange, locate, roman } from "@/lib/beatSeeker/tiers";
 
 describe("BEAT-TIER のしきい値", () => {
   it("段の下限は、表のとおり（Novice は 400 刻み、Intermediate〜Expert は 200 刻み、Veteran 以上は 100 刻み）", () => {
@@ -70,5 +70,21 @@ describe("Rate-Tier のしきい値", () => {
 describe("段の表記", () => {
   it("1〜5 を I〜V にする", () => {
     expect([1, 2, 3, 4, 5].map(roman)).toEqual(["I", "II", "III", "IV", "V"]);
+  });
+});
+
+describe("ティアの変動の短い表記", () => {
+  it("同じティア名の中の段の変化は、段だけにする。ティア名が変わるときは全部出す。変わらなければ、いまのティアだけ", () => {
+    expect(compactTierChange("Master II", "Master III")).toBe("Master II → III");
+    expect(compactTierChange("Master V", "Ancient I")).toBe("Master V → Ancient I");
+    expect(compactTierChange("Master II", "Master II")).toBe("Master II");
+    expect(compactTierChange("Beginner", "Novice I")).toBe("Beginner → Novice I");
+    expect(compactTierChange("Mythic V", "Legend")).toBe("Mythic V → Legend");
+  });
+
+  it("前が分からなければ、いまのティアだけ。どちらも分からなければ null", () => {
+    expect(compactTierChange(null, "Master II")).toBe("Master II");
+    expect(compactTierChange("Master II", null)).toBe("Master II");
+    expect(compactTierChange(null, null)).toBeNull();
   });
 });

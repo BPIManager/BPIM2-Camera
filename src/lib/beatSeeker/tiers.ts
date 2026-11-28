@@ -120,3 +120,19 @@ export function locate(table: TierTable, pt: number): TierPosition {
     remaining: next ? Math.max(0, next.at - pt) : null,
   };
 }
+
+/**
+ * ティアの変動を短い 1 つの文字列にする。同じティア名の中の段の変化は、段だけにする（「Master II → III」）。
+ * ティア名が変わるときは、全部を出す（「Master V → Ancient I」）。変わらなければ、いまのティアだけ。どちらも分からなければ null
+ */
+export function compactTierChange(before: string | null, after: string | null): string | null {
+  if (after === null) return before;
+  if (before === null || before === after) return after;
+  const split = (label: string) => {
+    const i = label.lastIndexOf(" ");
+    return i < 0 ? { name: label, step: null } : { name: label.slice(0, i), step: label.slice(i + 1) };
+  };
+  const b = split(before);
+  const a = split(after);
+  return a.step !== null && b.name === a.name ? `${before} → ${a.step}` : `${before} → ${after}`;
+}
