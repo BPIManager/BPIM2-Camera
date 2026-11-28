@@ -57,9 +57,24 @@ const texts = (lines: readonly OcrLine[]) => lines.map((l) => `${l.text}(${Math.
 
 /** 任意のメッセージを、ブラウザのコンソールと開発サーバーのターミナルに残す（開発中だけ） */
 export function logDebug(...lines: string[]): void {
-  if (!import.meta.env.DEV) return;
+  if (!import.meta.env.DEV || import.meta.env.MODE === "test") return;
   console.log("[ocr]", ...lines);
   void fetch("/__debug/ocr", { method: "POST", headers: { "content-type": "text/plain" }, body: lines.join(String.fromCharCode(10)), keepalive: true }).catch(() => undefined);
+}
+
+/** 端末の時刻（ミリ秒まで）。裏に回している間は送れず、あとからまとめて届くことがあるので、起きた時刻を端末で付ける */
+const clock = () => {
+  const d = new Date();
+  const p = (n: number, w = 2) => String(n).padStart(w, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+};
+
+/**
+ * 原因を調べるための出来事を、開発サーバーに残す（開発中だけ。tailscale serve 経由でスマホから開いたとき、PC の internal/debug.log に貯まる）。
+ * tag は出どころ（ocr:title・camera など）
+ */
+export function logEvent(tag: string, message: string): void {
+  logDebug(`${clock()} [${tag}] ${message}`);
 }
 
 /**

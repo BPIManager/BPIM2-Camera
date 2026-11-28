@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openCameraStream } from "@/lib/camera/stream";
+import { logEvent } from "@/lib/debug/ocrLog";
 import { guideToVideoRect, type Rect, type Size } from "@/lib/vision/framing";
 import { STILL_FRAME_WIDTH } from "@/lib/vision/autoCapture";
 import { toGray, type Gray } from "@/lib/vision/frame";
@@ -31,6 +32,10 @@ export interface ZoomInfo {
   digital: boolean;
 }
 
+/** 映像が止まっていないかを確かめる間隔（ミリ秒）と、コマが進まないのが何回続いたら開き直すか */
+const STALL_CHECK_MS = 1000;
+const STALL_CHECKS = 3;
+
 const DIGITAL_ZOOM: ZoomInfo = { min: 1, max: 4, step: 0.1, digital: true };
 
 type ZoomCapabilities = MediaTrackCapabilities & { zoom?: { min: number; max: number; step?: number } };
@@ -47,6 +52,8 @@ export function useCamera(enabled: boolean, deviceId: string | null = null) {
   // カメラ自体のズームは、スライダーやピンチで頻繁に変わる。描画ごとに最新の値だけを送る
   const pendingZoomRef = useRef<number | null>(null);
   const rafRef = useRef(0);
+  // 映像が止まったときに、カメラを開き直すための番号（増やすと開き直す）
+  const [restartKey, setRestartKey] = useState(0);
 
   useEffect(() => {
     if (!enabled) return;
@@ -58,15 +65,23 @@ export function useCamera(enabled: boolean, deviceId: string | null = null) {
     let cancelled = false;
     setState("starting");
     setZoomInfo(null);
+    logEvent("camera", `開く（${restartKey > 0 ? `開き直し ${restartKey} 回目` : "初回"}）`);
     openCameraStream(deviceId)
       .then(async (s) => {
         if (cancelled) {
+          logEvent("camera", "開いたが、もう要らないので止める");
           s.getTracks().forEach((t) => t.stop());
           return;
         }
         stream = s;
         const track = s.getVideoTracks()[0] ?? null;
         trackRef.current = track;
+        if (track) {
+          // 端末にカメラを止められた・一時的に映像が来なくなった、を記録する
+          track.addEventListener("ended", () => logEvent("camera", "track が ended になった"));
+          track.addEventListener("mute", () => logEvent("camera", "track が mute になった"));
+          track.addEventListener("unmute", () => logEvent("camera", "track の mute が解けた"));
+        }
         const hw = (track?.getCapabilities?.() as ZoomCapabilities | undefined)?.zoom;
         if (hw && hw.max > hw.min) {
           setZoomInfo({ min: hw.min, max: hw.max, step: hw.step || 0.1, digital: false });
@@ -80,20 +95,74 @@ export function useCamera(enabled: boolean, deviceId: string | null = null) {
         const v = videoRef.current;
         if (v) {
           v.srcObject = s;
-          await v.play().catch(() => undefined);
+          await v.play().catch((e: unknown) => logEvent("camera", `再生を始められない: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`));
         }
+        logEvent("camera", `準備できた（${track?.getSettings?.().width ?? "?"}x${track?.getSettings?.().height ?? "?"}・再生${v?.paused ? "停止中" : "中"}）`);
         setState("ready");
       })
-      .catch(() => !cancelled && setState("denied"));
+      .catch((e: unknown) => {
+        logEvent("camera", `開けない: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`);
+        if (!cancelled) setState("denied");
+      });
     return () => {
       cancelled = true;
+      if (stream) logEvent("camera", "止める");
       cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
       pendingZoomRef.current = null;
       trackRef.current = null;
       stream?.getTracks().forEach((t) => t.stop());
+      // 止めた映像の最後のコマが残らないよう、映像から外す
+      const v = videoRef.current;
+      if (v && v.srcObject === stream) v.srcObject = null;
     };
-  }, [enabled, deviceId]);
+  }, [enabled, deviceId, restartKey]);
+
+  // 映像が止まっていないかを見張る。アプリを裏に回して戻ったときや、結果の画面を閉じてカメラを開き直したときに、
+  // 映像が止まったままになることがある（カメラが端末に止められる・再生が始まらない）
+  useEffect(() => {
+    if (!enabled || state !== "ready") return;
+    let lastTime = -1;
+    let stalled = 0;
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      const v = videoRef.current;
+      const track = trackRef.current;
+      if (!v) return;
+      // カメラが止められた：開き直す
+      if (!track || track.readyState === "ended") {
+        logEvent("camera", "見張り: カメラが止められている。開き直す");
+        setRestartKey((k) => k + 1);
+        return;
+      }
+      // 再生が止まっている：再生し直す
+      if (v.paused) {
+        logEvent("camera", "見張り: 再生が止まっている。再生し直す");
+        void v.play().catch((e: unknown) => logEvent("camera", `再生し直せない: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`));
+        return;
+      }
+      // 再生中なのに、コマが進まない状態が続く：開き直す
+      stalled = v.currentTime === lastTime ? stalled + 1 : 0;
+      lastTime = v.currentTime;
+      if (stalled >= STALL_CHECKS) {
+        logEvent("camera", `見張り: コマが ${STALL_CHECKS} 回続けて進まない（track: ${track.readyState}${track.muted ? "・mute" : ""}）。開き直す`);
+        setRestartKey((k) => k + 1);
+      }
+    };
+    const onVisible = () => {
+      logEvent("camera", `表示: ${document.visibilityState}`);
+      if (document.visibilityState !== "visible") return;
+      lastTime = -1;
+      stalled = 0;
+      check();
+    };
+    const timer = setInterval(check, STALL_CHECK_MS);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [enabled, state]);
 
   /** ズームの倍率を変える。カメラが対応していればカメラ自体のズーム、なければ映像の拡大 */
   const setZoom = useCallback(

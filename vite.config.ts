@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vitest/config";
 import type { Plugin } from "vite";
@@ -69,11 +69,16 @@ function ocrDebugLog(): Plugin {
           res.end();
         });
       });
+      // 読み取りの記録と、原因を調べるための出来事（Worker・カメラ・エラーなど）。ターミナルに出し、internal/debug.log にも貯める
+      const logFile = path.resolve(import.meta.dirname, "internal/debug.log");
       server.middlewares.use("/__debug/ocr", (req, res) => {
         let body = "";
         req.on("data", (c) => (body += c));
         req.on("end", () => {
-          console.log(`\n[ocr ${new Date().toLocaleTimeString("ja-JP")}]\n${body}\n`);
+          const at = new Date().toLocaleTimeString("ja-JP");
+          console.log(`\n[ocr ${at}]\n${body}\n`);
+          mkdirSync(path.dirname(logFile), { recursive: true });
+          appendFileSync(logFile, `--- ${new Date().toLocaleDateString("ja-JP")} ${at} (受信)\n${body}\n`);
           res.statusCode = 204;
           res.end();
         });
