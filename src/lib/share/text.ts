@@ -16,16 +16,15 @@ function chartLine(r: ResultRecord): string {
  * シェア本文。
  *   ☆12 楽曲名[SPA]
  *   EX: nnnn (MAX-nnn)
- *   BPI: nn.nn
- *   推定順位: nn位
+ *   BPI: nn.nn (推定順位: nn位)
  * ランクの表記は、いちばん良い見せ方（AAA 以上は MAX-n、それより下は「AA+n / AAA-nnn」）。
  * BPI と推定順位は、算出できたときだけ載せる（☆10 以下は「算出対象外」なので省く）。
  */
 export function buildShareText(r: ResultRecord, preview: BeatSeekerPreview | null = null): string {
-  const parts = [`EX: ${r.exScore} (${bestRankNotation(r.exScore, r.chart.notes * 2)})`];
-  if (r.bpiStatus === "calculated" && r.bpi !== null) parts.push(`BPI: ${r.bpi.toFixed(2)}`);
-  if (r.estimatedRank !== null) parts.push(`推定順位: ${r.estimatedRank}位`);
-  const lines = [chartLine(r), ...parts];
+  const lines = [chartLine(r), `EX: ${r.exScore} (${bestRankNotation(r.exScore, r.chart.notes * 2)})`];
+  const rank = r.estimatedRank !== null ? `推定順位: ${r.estimatedRank}位` : null;
+  if (r.bpiStatus === "calculated" && r.bpi !== null) lines.push(`BPI: ${r.bpi.toFixed(2)}${rank ? ` (${rank})` : ""}`);
+  else if (rank) lines.push(rank);
   if (preview) lines.push(...ptLines(preview));
   return lines.join("\n");
 }
