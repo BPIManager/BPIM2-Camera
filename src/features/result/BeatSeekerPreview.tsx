@@ -28,6 +28,24 @@ function playOf(record: ResultRecord): BeatSeekerPlay | null {
   };
 }
 
+/**
+ * beat-seeker に送れる内容。SP・最新バージョンのスコアで、ランプが分かるときだけ。送れなければ null。
+ * プレビューと登録が、同じ内容を送る（プレビューで見たものを、そのまま登録する）
+ */
+export function beatSeekerPlay(record: ResultRecord | null, syncTarget: SyncTarget): BeatSeekerPlay | null {
+  if (record === null || record.chart.playStyle !== "SP" || syncTarget !== "latest") return null;
+  return playOf(record);
+}
+
+/** 送れないときの理由（画面に出す）。送れるなら null。連携していないときは、送れない理由を出す必要がないので null */
+export function beatSeekerBlockedReason(record: ResultRecord | null, syncTarget: SyncTarget, canWrite: boolean): string | null {
+  if (record === null) return null;
+  if (!canWrite) return "このトークンには、スコアを登録する権限がありません（「スコア登録も許可」で発行し直してください）";
+  if (record.chart.playStyle !== "SP" || syncTarget !== "latest") return "SP の最新バージョンのスコアだけ、登録できます";
+  if (playOf(record) === null) return "クリアランプを選ぶと、登録できます";
+  return null;
+}
+
 /** beat-seeker のプレビューの状態。結果画面の数値の欄と、詳細の両方が使う（取得は 1 回） */
 export type BeatSeekerPreviewState =
   /** 連携していない */
@@ -47,7 +65,7 @@ export type BeatSeekerPreviewState =
 export function useBeatSeekerPreview(record: ResultRecord | null, syncTarget: SyncTarget): BeatSeekerPreviewState {
   const link = useBeatSeekerLink();
   const supported = record !== null && record.chart.playStyle === "SP" && syncTarget === "latest";
-  const play = link && supported ? playOf(record) : null;
+  const play = link && supported ? beatSeekerPlay(record, syncTarget) : null;
   const key = play ? `beat-seeker-preview:${JSON.stringify(play)}` : null;
   const result = useRemote<PreviewResult>(key, () => previewBeatSeekerScore(link!.token, play!), DEBOUNCE_MS);
 

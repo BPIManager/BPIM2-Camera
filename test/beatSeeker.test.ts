@@ -2,8 +2,9 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import { resetDbForTest } from "@/lib/storage/db";
-import { BEAT_SEEKER_API, consistentJudge, fetchMe, looksLikeToken, normalizeToken, playBody, previewBeatSeekerScore, type BeatSeekerPlay } from "@/lib/beatSeeker/client";
-import { headlinePt } from "@/features/result/BeatSeekerPreview";
+import { BEAT_SEEKER_API, consistentJudge, fetchMe, looksLikeToken, normalizeToken, playBody, previewBeatSeekerScore, registerBeatSeekerScore, revertBeatSeekerSubmission, toJstIso, type BeatSeekerPlay } from "@/lib/beatSeeker/client";
+import { beatSeekerBlockedReason, beatSeekerPlay, headlinePt } from "@/features/result/BeatSeekerPreview";
+import { registerErrorMessage, revertErrorMessage } from "@/hooks/useBeatSeekerSync";
 import { clearBeatSeekerLink, loadBeatSeekerLink, resetBeatSeekerCacheForTest, saveBeatSeekerLink, subscribeBeatSeekerLink } from "@/lib/beatSeeker/token";
 
 const respond = (status: number, body: unknown) => vi.fn().mockResolvedValue({ ok: status < 300, status, json: async () => body });
@@ -132,5 +133,80 @@ describe("数値の欄に出す PT", () => {
     expect(headlinePt(beatOnly, 10)?.label).toBe("BEAT-PT");
     expect(headlinePt(rateOnly, 12)?.label).toBe("Rate-PT");
     expect(headlinePt(neither, 12)).toBeNull();
+  });
+});
+
+describe("beat-seeker への登録（POST /scores）と取り消し", () => {
+  it("撮影日時は +09:00 付きの ISO 8601 にする", () => {
+    // 2026-11-28 12:03:00 UTC = 21:03:00 JST
+    expect(toJstIso(Date.UTC(2026, 10, 28, 12, 3, 0))).toBe("2026-11-28T21:03:00+09:00");
+    // 日付をまたぐ（15:00 UTC 以降は、翌日）
+    expect(toJstIso(Date.UTC(2026, 10, 28, 16, 0, 5))).toBe("2026-11-29T01:00:05+09:00");
+  });
+
+  it("clientRequestId と playedAt を付けて送り、submissionId・updated・duplicate を返す", async () => {
+    const fetchImpl = respond(200, { submissionId: 7, updated: true, duplicate: false });
+    expect(await registerBeatSeekerScore("bs_live_x", play, "req-1", "2026-11-28T21:03:00+09:00", fetchImpl)).toEqual({ kind: "ok", submissionId: 7, updated: true, duplicate: false });
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe(`${BEAT_SEEKER_API}/api/external/v1/scores`);
+    expect(init.method).toBe("POST");
+    expect(init.headers.Authorization).toBe("Bearer bs_live_x");
+    expect(JSON.parse(init.body)).toMatchObject({ title: "冥", clearType: "HARD CLEAR", clientRequestId: "req-1", playedAt: "2026-11-28T21:03:00+09:00", version: 34 });
+  });
+
+  it("再送（duplicate）・記録が伸びなかった（updated: false）も、そのまま返す", async () => {
+    expect(await registerBeatSeekerScore("t", play, "r", "x", respond(200, { submissionId: 7, updated: false, duplicate: true }))).toEqual({ kind: "ok", submissionId: 7, updated: false, duplicate: true });
+  });
+
+  it("401 は invalid、403 は forbidden（登録の権限がない）、429 は rate-limited、400・404 は受け付けない内容、形が違えば error", async () => {
+    expect(await registerBeatSeekerScore("t", play, "r", "x", respond(401, {}))).toEqual({ kind: "invalid" });
+    expect(await registerBeatSeekerScore("t", play, "r", "x", respond(403, {}))).toEqual({ kind: "forbidden" });
+    expect(await registerBeatSeekerScore("t", play, "r", "x", respond(429, {}))).toEqual({ kind: "rate-limited" });
+    expect(await registerBeatSeekerScore("t", play, "r", "x", respond(400, { code: "JUDGE_MISMATCH", error: "合いません" }))).toEqual({ kind: "rejected", code: "JUDGE_MISMATCH", message: "合いません" });
+    expect((await registerBeatSeekerScore("t", play, "r", "x", respond(200, { foo: 1 }))).kind).toBe("error");
+    expect((await registerBeatSeekerScore("t", play, "r", "x", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))).kind).toBe("error");
+  });
+
+  it("取り消し：DELETE で送る。409 は取り消せない（理由つき）、401・403 はトークンの問題", async () => {
+    const ok = respond(200, { reverted: true });
+    expect(await revertBeatSeekerSubmission("t", 7, ok)).toEqual({ kind: "ok" });
+    expect(ok.mock.calls[0][0]).toBe(`${BEAT_SEEKER_API}/api/external/v1/scores/submissions/7`);
+    expect(ok.mock.calls[0][1].method).toBe("DELETE");
+    expect(await revertBeatSeekerSubmission("t", 7, respond(409, { code: "CHANGED_SINCE", error: "あとから変わっています" }))).toEqual({ kind: "conflict", code: "CHANGED_SINCE", message: "あとから変わっています" });
+    expect(await revertBeatSeekerSubmission("t", 7, respond(401, {}))).toEqual({ kind: "invalid" });
+    expect(await revertBeatSeekerSubmission("t", 7, respond(403, {}))).toEqual({ kind: "forbidden" });
+    expect((await revertBeatSeekerSubmission("t", 7, vi.fn().mockRejectedValue(new Error("x")))).kind).toBe("error");
+  });
+});
+
+describe("beat-seeker の登録のメッセージと、送れない理由", () => {
+  const record = (over: Record<string, unknown> = {}) =>
+    ({ chart: { playStyle: "SP", difficulty: "ANOTHER", title: "冥", level: 12, notes: 1000, songId: 1 }, exScore: 1600, clearType: "HARD CLEAR", missCount: 3, judge: null, ...over }) as unknown as Parameters<typeof beatSeekerBlockedReason>[0];
+
+  it("送れるときは null。権限がない・DP や INFINITAS・ランプが分からないときは、理由を返す", () => {
+    expect(beatSeekerBlockedReason(record(), "latest", true)).toBeNull();
+    expect(beatSeekerBlockedReason(record(), "latest", false)).toContain("権限");
+    expect(beatSeekerBlockedReason(record({ chart: { playStyle: "DP" } }), "latest", true)).toContain("SP の最新バージョン");
+    expect(beatSeekerBlockedReason(record(), "inf", true)).toContain("SP の最新バージョン");
+    expect(beatSeekerBlockedReason(record({ clearType: null }), "latest", true)).toContain("クリアランプ");
+    expect(beatSeekerBlockedReason(null, "latest", true)).toBeNull();
+  });
+
+  it("送る内容は、SP の最新バージョンでランプが分かるときだけ。EX と合わない判定内訳は送らない", () => {
+    expect(beatSeekerPlay(record(), "latest")).toMatchObject({ title: "冥", difficulty: "ANOTHER", exScore: 1600, clearType: "HARD CLEAR", missCount: 3, judge: null });
+    expect(beatSeekerPlay(record({ clearType: "NO PLAY" }), "latest")).toBeNull();
+    expect(beatSeekerPlay(record(), "inf")).toBeNull();
+    expect(beatSeekerPlay(record({ judge: { pgreat: 700, great: 200 } }), "latest")?.judge).toEqual({ pgreat: 700, great: 200 });
+    expect(beatSeekerPlay(record({ exScore: 1599, judge: { pgreat: 700, great: 200 } }), "latest")?.judge).toBeNull();
+  });
+
+  it("登録・取り消しの失敗を、日本語にする", () => {
+    expect(registerErrorMessage({ kind: "forbidden" })).toContain("権限");
+    expect(registerErrorMessage({ kind: "invalid" })).toContain("トークンが無効");
+    expect(registerErrorMessage({ kind: "rate-limited" })).toContain("回数制限");
+    expect(registerErrorMessage({ kind: "rejected", code: "CHART_NOT_FOUND", message: "x" })).toContain("見つかりませんでした");
+    expect(registerErrorMessage({ kind: "rejected", code: "JUDGE_MISMATCH", message: "合いません" })).toBe("合いません");
+    expect(revertErrorMessage({ kind: "conflict", code: "CHANGED_SINCE", message: "x" })).toContain("あとから記録が変わっている");
+    expect(revertErrorMessage({ kind: "conflict", code: "ALREADY_REVERTED", message: "x" })).toContain("取り消し済み");
   });
 });

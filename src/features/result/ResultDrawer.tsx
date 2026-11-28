@@ -27,9 +27,12 @@ import Label from "@/components/ui/label";
 import { REFERENCE_VERSION } from "@/lib/bpi/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBpim2Profile } from "@/hooks/useBpim2Profile";
+import { useBeatSeekerLink } from "@/hooks/useBeatSeekerLink";
+import { useBeatSeekerSync, revertErrorMessage, type BeatSeekerSyncStatus } from "@/hooks/useBeatSeekerSync";
 import { useBpimSync } from "@/hooks/useBpimSync";
+import { WRITE_SCOPE } from "@/lib/beatSeeker/client";
 import { useRemote } from "@/hooks/useRemote";
-import { formatPt, headlinePt, useBeatSeekerPreview } from "./BeatSeekerPreview";
+import { beatSeekerBlockedReason, beatSeekerPlay, formatPt, headlinePt, useBeatSeekerPreview } from "./BeatSeekerPreview";
 import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import {
   syncTargetLabel,
@@ -53,6 +56,7 @@ import type { Settings } from "@/lib/storage/settings";
 import type { Draft } from "./draft";
 import SongPicker from "./SongPicker";
 import SyncChip from "./SyncChip";
+import { SERVICE_ICONS, ServiceIcon, type ServiceId, type SyncService } from "./SyncServices";
 import SyncTargetMenu from "./SyncTargetMenu";
 import SongTabs from "./SongTabs";
 import { useResultEditor } from "./useResultEditor";
@@ -135,6 +139,59 @@ export default function ResultDrawer({
   const showPt = beatSeeker.kind === "loading" || beatSeeker.kind === "failed" || headline !== null;
   // 確かめている間の見出し。☆11 以上は BEAT-PT、☆10 以下は Rate-PT
   const ptLabel = headline?.label ?? ((ed.record?.chart.level ?? 12) >= 11 ? "BEAT-PT" : "Rate-PT");
+
+  // beat-seeker への登録。連携していて、登録の権限があるときだけ。送る内容は、プレビューと同じ（見たものを、そのまま登録する）
+  const [openedAt] = useState(() => Date.now());
+  const beatSeekerLink = useBeatSeekerLink();
+  const canWrite = beatSeekerLink?.me.scopes.includes(WRITE_SCOPE) === true;
+  // 登録は、変動（プレビュー）を確かめて、その内容を見たあとだけ。曲が見つからない・通信できないなどで確かめられないときは、送らない
+  const bsBlocked = !beatSeekerLink
+    ? null
+    : (beatSeekerBlockedReason(ed.record, syncTarget, canWrite) ??
+      (beatSeeker.kind === "loading" ? "変動を確かめています。少し待ってください" : beatSeeker.kind === "failed" ? "変動を確かめられなかったため、登録できません（beat-seeker のタブを見てください）" : null));
+  const bsSync = useBeatSeekerSync(beatSeekerLink && canWrite ? beatSeekerLink.token : null, beatSeekerPlay(ed.record, syncTarget), openedAt);
+
+  // 同期の送り先。送れて、メニューで外していないものに送る
+  const [skipped, setSkipped] = useState<Record<ServiceId, boolean>>({ bpim2: false, "beat-seeker": false });
+  const services: SyncService[] = [
+    { id: "bpim2", ...SERVICE_ICONS.bpim2, on: !skipped.bpim2 && sync.canSync, blocked: user ? null : "サインインすると使えます" },
+    ...(beatSeekerLink ? [{ id: "beat-seeker" as const, ...SERVICE_ICONS["beat-seeker"], on: !skipped["beat-seeker"] && bsBlocked === null && bsSync.canRegister, blocked: bsBlocked }] : []),
+  ];
+  const active = services.filter((s) => s.on);
+  const bpimDone = sync.status.kind === "saved" || sync.status.kind === "not-improved";
+  const bsDone = bsSync.status.kind === "saved";
+  const syncing = sync.status.kind === "syncing" || bsSync.status.kind === "syncing" || bsSync.status.kind === "reverting";
+  const allDone = active.length > 0 && active.every((s) => (s.id === "bpim2" ? bpimDone : bsDone));
+  const syncTitle = active.length > 0 ? `送り先: ${active.map((s) => s.label).join("・")}（BPIM2 の保存先: ${syncTargetLabel(syncTarget)}）` : "送れるサービスがありません（BPIM2 にサインインするか、beat-seeker と連携してください）";
+  // 登録を取り消せる（登録して、記録を書き換えた。まだ取り消していない）ときの登録番号
+  const revertableId = bsSync.status.kind === "saved" && bsSync.status.updated ? bsSync.status.submissionId : null;
+
+  const revertBeatSeeker = async (submissionId: number) => {
+    const r = await bsSync.revert(submissionId);
+    if (!r) return;
+    if (r.kind === "ok") toast("beat-seeker の登録を取り消しました");
+    else toast.error("取り消せませんでした", { description: revertErrorMessage(r) });
+  };
+  const announceBeatSeeker = (status: BeatSeekerSyncStatus | null) => {
+    if (status?.kind === "error") toast.error("beat-seeker に登録できませんでした", { description: status.message });
+    else if (status?.kind === "saved" && !status.updated)
+      toast("beat-seeker の記録は変わりませんでした", { description: status.duplicate ? "すでに登録済みです" : "登録済みの記録のほうが良い（または同じ）ため、何も書き換えていません" });
+    else if (status?.kind === "saved")
+      toast("beat-seeker に登録しました", { description: "間違えたときは、取り消せます", duration: 12_000, action: { label: "取り消す", onClick: () => void revertBeatSeeker(status.submissionId) } });
+  };
+  /** 送れるサービスすべてに、同時に送る（すでに送ったものは、もう一度送らない） */
+  const runSync = async () => {
+    const jobs: Promise<unknown>[] = [];
+    if (services.find((s) => s.id === "bpim2")?.on && !bpimDone)
+      jobs.push(
+        sync.sync().then((result) => {
+          // BPIM2 は自己ベストの更新だけを保存する。更新していなかったときは、保存されなかった理由を知らせる
+          if (result?.kind === "not-improved") toast("自己ベスト未更新", { description: `BPIM2 に保存済みの${syncTargetLabel(syncTarget)}の記録を上回っていないため、保存されませんでした` });
+        }),
+      );
+    if (services.find((s) => s.id === "beat-seeker")?.on && !bsDone) jobs.push(bsSync.register().then(announceBeatSeeker));
+    await Promise.all(jobs);
+  };
 
   const commit = async () => {
     if (!ed.record) return;
@@ -409,68 +466,44 @@ export default function ResultDrawer({
             {saved ? <Check /> : <Download />}{" "}
             {saved ? "画像保存済み" : "画像保存"}
           </Button>
-          {/* BPIM2 への保存は常に手動。サインインしていないと押せない。右の矢印で、保存先（最新バージョン / INFINITAS）を見て選べる */}
+          {/* 同期は常に手動（押したときだけ送る）。連携しているサービスすべてに送る。ボタンの横のアイコンが、送り先。
+              右の矢印で、サービスごとに送る・送らないと、BPIM2 の保存先（最新バージョン / INFINITAS）を選べる */}
           <div className="relative flex">
             <Button
               variant="secondary"
               className="min-w-0 flex-1 gap-1.5 rounded-r-none px-2"
-              title={
-                user
-                  ? `保存先: ${syncTargetLabel(syncTarget)}`
-                  : "BPIM2 にサインインすると使えます"
-              }
-              disabled={
-                !sync.canSync ||
-                sync.status.kind === "syncing" ||
-                sync.status.kind === "saved" ||
-                sync.status.kind === "not-improved"
-              }
-              onClick={async () => {
-                const result = await sync.sync();
-                // BPIM2 は自己ベストの更新だけを保存する。更新していなかったときは、保存されなかった理由を知らせる
-                if (result?.kind === "not-improved")
-                  toast("自己ベスト未更新", {
-                    description: `BPIM2 に保存済みの${syncTargetLabel(syncTarget)}の記録を上回っていないため、保存されませんでした`,
-                  });
-              }}
+              title={syncTitle}
+              disabled={active.length === 0 || syncing || allDone}
+              onClick={() => void runSync()}
             >
-              {sync.status.kind === "syncing" ? (
-                <Loader2 className="animate-spin" />
-              ) : sync.status.kind === "saved" ? (
-                <Check />
-              ) : (
-                <RefreshCw />
-              )}
-              <span className="truncate">
-                {sync.status.kind === "syncing"
-                  ? "同期中"
-                  : sync.status.kind === "saved"
-                    ? "同期済み"
-                    : "BPIM2同期"}
+              {syncing ? <Loader2 className="animate-spin" /> : allDone ? <Check /> : <RefreshCw />}
+              <span className="truncate">{syncing ? "同期中" : allDone ? "同期済み" : "同期"}</span>
+              <span className="flex shrink-0 items-center gap-1">
+                {services.map((s) => (
+                  <ServiceIcon key={s.id} service={s} />
+                ))}
               </span>
             </Button>
             <Button
               variant="secondary"
               size="icon"
               className="w-9 shrink-0 rounded-l-none border-l border-border"
-              aria-label={`同期先を選ぶ（いまは${syncTargetLabel(syncTarget)}）`}
+              aria-label="同期の送り先を選ぶ"
               aria-haspopup="menu"
               aria-expanded={targetMenuOpen}
-              disabled={sync.status.kind === "syncing"}
+              disabled={syncing}
               onClick={() => setTargetMenuOpen((v) => !v)}
             >
-              <ChevronUp
-                className={cn(
-                  "transition-transform",
-                  targetMenuOpen && "rotate-180",
-                )}
-              />
+              <ChevronUp className={cn("transition-transform", targetMenuOpen && "rotate-180")} />
             </Button>
             {targetMenuOpen && (
               <SyncTargetMenu
                 value={syncTarget}
                 onChange={setSyncTarget}
                 onClose={() => setTargetMenuOpen(false)}
+                services={services}
+                onToggle={(id) => setSkipped((k) => ({ ...k, [id]: !k[id] }))}
+                onRevert={revertableId === null ? null : () => void revertBeatSeeker(revertableId)}
               />
             )}
           </div>

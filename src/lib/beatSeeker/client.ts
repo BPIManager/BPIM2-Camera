@@ -157,3 +157,75 @@ export async function previewBeatSeekerScore(token: string, play: BeatSeekerPlay
     return { kind: "error", message: "beat-seeker に接続できませんでした" };
   }
 }
+
+/** 登録の結果（POST /scores）。updated が false なら、どの記録も伸びず、何も書き換えていない */
+export type RegisterResult =
+  | { kind: "ok"; submissionId: number; updated: boolean; duplicate: boolean }
+  /** トークンが無効（401） */
+  | { kind: "invalid" }
+  /** 登録の権限がない（403。「読み取りのみ」で発行したトークン） */
+  | { kind: "forbidden" }
+  | { kind: "rate-limited" }
+  /** 送った内容を受け付けない（400・404）。message は表示してよい日本語 */
+  | { kind: "rejected"; code: string; message: string }
+  | { kind: "error"; message: string };
+
+/** 撮影日時を、+09:00 付きの ISO 8601 にする（beat-seeker は +09:00 を求める。例 2026-11-28T21:03:00+09:00） */
+export function toJstIso(ms: number): string {
+  const d = new Date(ms + 9 * 3600_000);
+  return `${d.toISOString().slice(0, 19)}+09:00`;
+}
+
+/**
+ * スコアを登録する（POST /scores）。clientRequestId は、登録 1 件ごとに一意で、再送のときは同じものを使う（二重に登録しないため）。
+ * 一度入った記録は、あとから正しい値で上書きできない（取り消しだけ）ので、送る前に、画面で確認してもらう
+ */
+export async function registerBeatSeekerScore(token: string, play: BeatSeekerPlay, clientRequestId: string, playedAt: string, fetchImpl: typeof fetch = fetch, timeoutMs = PREVIEW_TIMEOUT_MS): Promise<RegisterResult> {
+  try {
+    const res = await fetchImpl(`${BEAT_SEEKER_API}/api/external/v1/scores`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ...playBody(play), playedAt, clientRequestId }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (res.status === 401) return { kind: "invalid" };
+    if (res.status === 403) return { kind: "forbidden" };
+    if (res.status === 429) return { kind: "rate-limited" };
+    const body = (await res.json().catch(() => null)) as { submissionId?: unknown; updated?: unknown; duplicate?: unknown; code?: string; error?: string } | null;
+    if (res.status === 400 || res.status === 404) return { kind: "rejected", code: body?.code ?? "", message: body?.error ?? `HTTP ${res.status}` };
+    if (!res.ok) return { kind: "error", message: body?.error ?? `HTTP ${res.status}` };
+    if (typeof body?.submissionId !== "number") return { kind: "error", message: "応答の形が想定と違います" };
+    return { kind: "ok", submissionId: body.submissionId, updated: body.updated === true, duplicate: body.duplicate === true };
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") return { kind: "error", message: "beat-seeker から応答がありません（登録されたかは、beat-seeker で確かめてください）" };
+    return { kind: "error", message: "beat-seeker に接続できませんでした" };
+  }
+}
+
+/** 取り消しの結果（DELETE /scores/submissions/{id}） */
+export type RevertResult =
+  | { kind: "ok" }
+  /** あとから別の登録や取り込みで記録が変わっていて、取り消せない（409 CHANGED_SINCE）／すでに取り消し済み（409 ALREADY_REVERTED） */
+  | { kind: "conflict"; code: string; message: string }
+  | { kind: "invalid" }
+  | { kind: "forbidden" }
+  | { kind: "error"; message: string };
+
+/** 登録を取り消し、その譜面の記録を登録前の状態に戻す（その譜面の記録が、登録直後のままのときだけ） */
+export async function revertBeatSeekerSubmission(token: string, submissionId: number, fetchImpl: typeof fetch = fetch, timeoutMs = PREVIEW_TIMEOUT_MS): Promise<RevertResult> {
+  try {
+    const res = await fetchImpl(`${BEAT_SEEKER_API}/api/external/v1/scores/submissions/${submissionId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (res.status === 401) return { kind: "invalid" };
+    if (res.status === 403) return { kind: "forbidden" };
+    const body = (await res.json().catch(() => null)) as { code?: string; error?: string } | null;
+    if (res.status === 409) return { kind: "conflict", code: body?.code ?? "", message: body?.error ?? "取り消せませんでした" };
+    if (!res.ok) return { kind: "error", message: body?.error ?? `HTTP ${res.status}` };
+    return { kind: "ok" };
+  } catch {
+    return { kind: "error", message: "beat-seeker に接続できませんでした" };
+  }
+}
