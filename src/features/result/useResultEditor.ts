@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchBpi, type BpiOutcome } from "@/lib/bpi/client";
 import { initialBpiStatus, isExScoreInRange } from "@/lib/domain/score";
-import type { ChartRef, ResultRecord } from "@/lib/domain/types";
+import type { ChartRef, ClearType, ResultRecord } from "@/lib/domain/types";
 import { toChartRef } from "@/lib/recognition/resolve";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import type { Draft } from "./draft";
@@ -25,6 +25,10 @@ export function useResultEditor(draft: Draft, version: string) {
   const [optionPick, setOptionPick] = useState<{ value: string } | null>(null);
   const readOption = draft.raw?.useOption ?? "OFF";
   const useOption = optionPick ? optionPick.value : readOption;
+  // クリアランプ（読み取り、または手で選んだもの）。読めなければ null（未選択）
+  const [clearTypePick, setClearTypePick] = useState<{ value: ClearType | null } | null>(null);
+  const readClearType = draft.raw?.clearType ?? null;
+  const clearType = clearTypePick ? clearTypePick.value : readClearType;
   // ミスカウント（いまは読み取れないので、手で入力する。入力した値は学習サンプルの正解にもなる）
   const [counts, setCounts] = useState<Record<CountKey, string>>({ missCount: draft.raw?.missCount?.toString() ?? "" });
   const num = (t: string) => (t === "" ? null : Number(t));
@@ -56,8 +60,9 @@ export function useResultEditor(draft: Draft, version: string) {
     if (chart && chart.songId !== draft.resolution?.chart?.songId) fields.push("song");
     if (exScore !== (draft.resolution?.exScore ?? null)) fields.push("exScore");
     if (optionPick && optionPick.value !== readOption) fields.push("useOption");
+    if (clearTypePick && clearTypePick.value !== readClearType) fields.push("clearType");
     return fields;
-  }, [chart, exScore, draft.resolution, readOption, optionPick]);
+  }, [chart, exScore, draft.resolution, readOption, optionPick, readClearType, clearTypePick]);
 
   const record: ResultRecord | null =
     chart && valid && exScore !== null
@@ -72,7 +77,7 @@ export function useResultEditor(draft: Draft, version: string) {
           fast: null,
           slow: null,
           bestMissCount: draft.raw?.bestMissCount ?? null,
-          clearType: draft.raw?.clearType ?? null,
+          clearType,
           bestClearType: draft.raw?.bestClearType ?? null,
           djLevel: draft.raw?.djLevel ?? null,
           useOption,
@@ -98,6 +103,9 @@ export function useResultEditor(draft: Draft, version: string) {
     /** 使用オプション（読み取り、または手で選んだもの）。読めなければ OFF */
     useOption,
     setUseOption: (value: string) => setOptionPick({ value }),
+    /** クリアランプ（読み取り、または手で選んだもの）。読めず、選んでもいなければ null */
+    clearType,
+    setClearType: (value: ClearType | null) => setClearTypePick({ value }),
     /** ミスカウントの入力（数字の文字列） */
     counts,
     setCount: (key: CountKey, text: string) => setCounts((c) => ({ ...c, [key]: text.replace(/\D/g, "").slice(0, 4) })),

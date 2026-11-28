@@ -334,6 +334,8 @@ export default function ResultDrawer({
                 </p>
               )}
               <ResultDetails
+                clearType={ed.clearType}
+                onClearType={ed.setClearType}
                 useOption={ed.useOption}
                 onUseOption={ed.setUseOption}
                 counts={ed.counts}
