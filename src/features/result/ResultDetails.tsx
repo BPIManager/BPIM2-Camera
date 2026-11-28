@@ -2,15 +2,12 @@ import Input from "@/components/ui/input";
 import { USE_OPTION_CHOICES } from "@/lib/recognition/useOption";
 import type { CountKey } from "./useResultEditor";
 
-const COUNTS: { key: CountKey; label: string }[] = [
-  { key: "missCount", label: "ミスカウント" },
-  { key: "fast", label: "FAST" },
-  { key: "slow", label: "SLOW" },
-];
+const COUNTS: { key: CountKey; label: string }[] = [{ key: "missCount", label: "ミスカウント" }];
 
 /**
  * 結果の詳細。使用オプションは読み取れた値を出し、違えば選び直せる。
- * ミスカウント・FAST・SLOW は、いまは読み取れないので、手で入力する（分析タブに使い、学習サンプルの正解にもなる。空でもよい）
+ * ミスカウントは、いまは読み取れないので、手で入力する（分析タブに使い、学習サンプルの正解にもなる。空でもよい）。
+ * FAST・SLOW は、読み取りを作るまで、学習用に写真を集めるだけにする（入力欄は出さない）
  */
 export default function ResultDetails({
   useOption,
@@ -44,23 +41,21 @@ export default function ResultDetails({
           ))}
         </select>
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        {COUNTS.map(({ key, label }) => (
-          <div key={key} className="flex min-w-0 flex-col gap-1">
-            <label htmlFor={`count-${key}`} className="text-xs text-muted-foreground">
-              {label}
-            </label>
-            <Input
-              id={`count-${key}`}
-              inputMode="numeric"
-              placeholder="—"
-              value={counts[key]}
-              onChange={(e) => onCount(key, e.target.value)}
-              className="h-9 text-center tabular-nums"
-            />
-          </div>
-        ))}
-      </div>
+      {COUNTS.map(({ key, label }) => (
+        <div key={key} className="flex items-center justify-between gap-3">
+          <label htmlFor={`count-${key}`} className="text-sm text-muted-foreground">
+            {label}
+          </label>
+          <Input
+            id={`count-${key}`}
+            inputMode="numeric"
+            placeholder="—"
+            value={counts[key]}
+            onChange={(e) => onCount(key, e.target.value)}
+            className="h-9 w-36 text-center tabular-nums"
+          />
+        </div>
+      ))}
     </div>
   );
 }

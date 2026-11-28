@@ -3,12 +3,12 @@ import { RadioGroup, RadioItem } from "@/components/ui/radio-group";
 import { summarizeByRadar, type CategorySummary, type Mean, type RadarCategory, type RadarTop } from "@/lib/analysis/summary";
 import type { ResultRecord } from "@/lib/domain/types";
 
-type Metric = "bpi" | "scoreRate" | "fastRate" | "missCount";
+// FAST 率は、FAST・SLOW を読み取れるようになるまで出さない（いまは記録に値がない）
+type Metric = "bpi" | "scoreRate" | "missCount";
 
 const METRICS: { id: Metric; label: string; format: (v: number) => string; note: string }[] = [
   { id: "bpi", label: "BPI", format: (v) => v.toFixed(2), note: "BPI を算出できた記録の平均" },
   { id: "scoreRate", label: "スコア率", format: (v) => `${(v * 100).toFixed(1)}%`, note: "EX ÷ 理論値の平均" },
-  { id: "fastRate", label: "FAST率", format: (v) => `${(v * 100).toFixed(1)}%`, note: "FAST ÷（FAST＋SLOW）の平均。50% より上は早押し、下は遅押しの傾向。結果画面で FAST・SLOW を入力した記録だけ" },
   { id: "missCount", label: "ミス", format: (v) => v.toFixed(1), note: "ミスカウントの平均。結果画面で入力した記録だけ" },
 ];
 
@@ -30,7 +30,7 @@ function useRadarTop(): RadarTop | null {
 /** 棒の長さ（0〜1）と、0 の位置（0〜1）。BPI は負になりうるので、0 を含む範囲で描く */
 function scale(rows: readonly CategorySummary[], metric: Metric) {
   const values = rows.flatMap((r) => (r[metric] ? [r[metric]!.value] : []));
-  const fixed = metric === "scoreRate" || metric === "fastRate" ? { lo: 0, hi: 1 } : null;
+  const fixed = metric === "scoreRate" ? { lo: 0, hi: 1 } : null;
   const lo = fixed?.lo ?? Math.min(0, ...values);
   const hi = fixed?.hi ?? Math.max(...values, metric === "bpi" ? 100 : 1);
   const at = (v: number) => (v - lo) / (hi - lo || 1);
@@ -56,7 +56,7 @@ export default function AnalysisSummary({ records }: { records: readonly ResultR
         <h2 className="text-sm font-semibold">レーダー別の傾向</h2>
         <p className="text-xs text-muted-foreground">譜面のいちばん高いレーダーの項目ごとに、記録をまとめています（SP ☆11・☆12 の {counted} 件）</p>
       </div>
-      <RadioGroup value={metric} onValueChange={(v) => setMetric(v as Metric)} aria-label="指標" className="grid-cols-4 gap-1">
+      <RadioGroup value={metric} onValueChange={(v) => setMetric(v as Metric)} aria-label="指標" className="grid-cols-3 gap-1">
         {METRICS.map((x) => (
           <RadioItem key={x.id} value={x.id} className="h-9 px-1 text-xs">
             {x.label}
@@ -73,8 +73,6 @@ export default function AnalysisSummary({ records }: { records: readonly ResultR
               <span className="font-medium">{LABEL[r.category]}</span>
               <span className="relative h-3 rounded-sm bg-muted" aria-hidden>
                 {metric === "bpi" && zero > 0 && <span className="absolute inset-y-0 w-px bg-border" style={{ left: `${zero * 100}%` }} />}
-                {/* FAST 率は 50% が早押し・遅押しの境目 */}
-                {metric === "fastRate" && <span className="absolute -inset-y-0.5 z-10 w-px bg-foreground/60" style={{ left: "50%" }} />}
                 {v && <span className="absolute inset-y-0 rounded-sm bg-primary" style={{ left: `${left * 100}%`, width: `${Math.max(width * 100, 1)}%` }} />}
               </span>
               <span className="text-right tabular-nums">
