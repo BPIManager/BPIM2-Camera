@@ -280,7 +280,7 @@ export default function ResultDrawer({
                     if (!ed.record) return;
                     await commit();
                     await shareResult(
-                      buildShareText(ed.record),
+                      buildShareText(ed.record, beatSeeker.kind === "ok" ? beatSeeker.preview : null),
                       settings.shareImage === "photo" ? draft.image : null,
                     );
                   }}
