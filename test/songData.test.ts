@@ -18,6 +18,12 @@ describe("自己ベストと自己歴代の点差", () => {
     expect(history[0].version).toBe("33");
   });
 
+  it("ランプ・ミス・使用オプションも持つ（無ければ null）", () => {
+    const h = flattenHistory({ "34": [{ exScore: 1900, bpi: 60, lastPlayed: "2026-11-01T00:00:00Z", clearState: "EX HARD CLEAR", missCount: 8, useOption: "RANDOM" }, { exScore: 1800, bpi: 50, lastPlayed: "2026-10-01T00:00:00Z" }] });
+    expect(h[0]).toMatchObject({ clearState: "EX HARD CLEAR", missCount: 8, useOption: "RANDOM" });
+    expect(h[1]).toMatchObject({ clearState: null, missCount: null, useOption: null });
+  });
+
   it("全バージョンの最高点が自己ベスト。記録なしは null", () => {
     expect(personalBest(history)).toBe(1800);
     expect(personalBest([])).toBeNull();

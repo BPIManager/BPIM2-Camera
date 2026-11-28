@@ -42,8 +42,8 @@ describe("beat-seeker のタブ", () => {
     // 後の値は、上がったときに緑色にする（span で囲む）ので、タグを除いた文字で照合する
     const html = render({ kind: "ok", preview: preview() });
     const text = html.replace(/<[^>]+>/g, "");
-    expect(text).toContain("譜面 139.51 → 140.2");
-    expect(text).toContain("譜面 1.2 → 1.5");
+    expect(text).toContain("単曲 139.51 → 140.2");
+    expect(text).toContain("単曲 1.2 → 1.5");
     expect(html).not.toContain("非公式難易度");
     expect(html).not.toContain("登録した場合の変動");
   });

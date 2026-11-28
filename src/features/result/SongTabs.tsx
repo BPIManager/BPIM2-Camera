@@ -100,7 +100,7 @@ export default function SongTabs({ record, outcome, self, history, best, bestVer
       >
         {main === "beat-seeker" && <BeatSeekerTab state={beatSeeker} />}
         {main === "bpi" && tab === "chart" && <ChartTab record={record} outcome={outcome} best={best} bestVersion={bestVersion} self={self} arenaRank={arenaRank} />}
-        {main === "bpi" && tab === "history" && <HistoryPanel signedIn={self !== null} history={history} />}
+        {main === "bpi" && tab === "history" && <HistoryPanel signedIn={self !== null} history={history} maxScore={record.chart.notes * 2} />}
         {main === "bpi" && tab === "ranking" && <RankingPanel self={self} chart={record.chart} exScore={record.exScore} bpi={record.bpi} />}
       </div>
     </section>

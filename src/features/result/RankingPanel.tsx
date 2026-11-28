@@ -11,11 +11,13 @@ import { SignInPrompt } from "./SignInPrompt";
 type Scope = "rival" | "global";
 
 const SCOPES: { id: Scope; label: string }[] = [
-  { id: "rival", label: "ライバル" },
+  { id: "rival", label: "ライバル内" },
   { id: "global", label: "グローバル" },
 ];
 
-const ROW_HEIGHT = 56;
+/** BPIM2 の曲詳細のランキングと同じ（行の高さ 48px、# / Player / EX・BPI / Diff の 4 列） */
+const ROW_HEIGHT = 48;
+const COLUMNS = "grid-cols-[40px_1fr_auto_52px]";
 
 interface Props {
   /** null なら未サインイン */
@@ -29,26 +31,36 @@ function RankingRow({ index, style, rows, selfEx }: RowComponentProps<{ rows: Ra
   const r = rows[index];
   const diff = r.exScore - selfEx;
   return (
-    <div style={style} className="px-1">
-      <div className={cn("flex h-full items-center gap-3 border-b border-border px-2", r.isSelf && "bg-warning/10")}>
-        <span className="w-9 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{r.rank}</span>
-        <Avatar src={r.profileImage} name={r.userName || "?"} className="size-8 text-xs" />
-        <p className={cn("min-w-0 flex-1 truncate text-sm", r.isSelf && "font-semibold")}>{r.isSelf ? `${r.userName || "あなた"}（今回）` : r.userName}</p>
-        <div className="flex shrink-0 flex-col items-end tabular-nums">
-          <span className="text-sm font-medium">{r.exScore}</span>
-          <span className="text-[11px] text-muted-foreground">{r.bpi !== null ? `BPI ${r.bpi.toFixed(2)}` : ""}</span>
+    <div style={style} className={cn("grid items-center border-b border-border px-3 last:border-b-0", COLUMNS, r.isSelf && "bg-primary/10")}>
+      <span className={cn("font-mono text-xs font-bold", r.rank <= 3 ? "text-warning" : "text-muted-foreground")}>#{r.rank}</span>
+      <div className="flex min-w-0 items-center gap-2">
+        <Avatar src={r.profileImage} name={r.userName || "?"} className="size-6 border border-border text-[9px]" />
+        <div className="min-w-0">
+          <p className="truncate text-xs font-bold tracking-tight">{r.userName || "あなた"}</p>
+          {r.isSelf && <p className="text-[9px] leading-none font-bold text-primary">あなた</p>}
         </div>
-        <span className={cn("w-12 shrink-0 text-right text-xs tabular-nums", r.isSelf ? "text-transparent" : diff > 0 ? "text-destructive" : "text-success")} aria-hidden={r.isSelf}>
-          {diff > 0 ? `+${diff}` : diff}
-        </span>
       </div>
+      <div className="mr-2 flex flex-col items-end gap-0.5 font-mono">
+        <span className="text-xs font-bold">{r.exScore}</span>
+        <span className="text-[10px] text-muted-foreground">{r.bpi !== null ? r.bpi.toFixed(1) : "-"}</span>
+      </div>
+      <span className={cn("text-right font-mono text-xs font-bold", diff > 0 ? "text-destructive" : diff < 0 ? "text-success" : "text-muted-foreground/60")}>{diff > 0 ? `+${diff}` : diff === 0 ? "-" : diff}</span>
     </div>
   );
 }
 
-const Message = ({ children }: { children: string }) => <p className="py-6 text-center text-sm text-muted-foreground">{children}</p>;
+const Header = () => (
+  <div className={cn("grid items-center border-b border-border bg-secondary px-3 py-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase", COLUMNS)}>
+    <span>#</span>
+    <span>Player</span>
+    <span className="mr-2 text-right">EX / BPI</span>
+    <span className="text-right">Diff</span>
+  </div>
+);
 
-/** 今回のスコアで入ったときの順位表。ライバル（フォロー中）とグローバルを切り替える。最初は自分が中央に来るようにスクロールする */
+const Message = ({ children }: { children: string }) => <p className="py-6 text-center text-xs text-muted-foreground">{children}</p>;
+
+/** 今回のスコアで入ったときの順位表（BPIM2 のランキングと同じ見た目）。ライバル内とグローバルを切り替える。最初は自分が中央に来るようにスクロールする */
 export default function RankingPanel({ self, chart, exScore, bpi }: Props) {
   const [scope, setScope] = useState<Scope>("rival");
   const listRef = useListRef(null);
@@ -79,7 +91,7 @@ export default function RankingPanel({ self, chart, exScore, bpi }: Props) {
             role="radio"
             aria-checked={scope === s.id}
             onClick={() => setScope(s.id)}
-            className={cn("rounded-sm py-1.5 text-sm transition-colors", scope === s.id ? "bg-card font-medium text-foreground" : "text-muted-foreground")}
+            className={cn("rounded-sm py-1 text-xs transition-colors", scope === s.id ? "bg-card font-medium text-foreground" : "text-muted-foreground")}
           >
             {s.label}
           </button>
@@ -92,21 +104,35 @@ export default function RankingPanel({ self, chart, exScore, bpi }: Props) {
         <Message>順位を取得できませんでした</Message>
       ) : (
         <>
-          <p className="shrink-0 px-1 text-sm">
-            いまのスコアで <span className="text-lg font-semibold tabular-nums">{rows[selfIndex]?.rank}位</span>
-            <span className="text-muted-foreground tabular-nums"> / {total}人</span>
-            {scope === "rival" && rows.length <= 1 && <span className="ml-2 text-xs text-muted-foreground">フォロー中のライバルに記録がありません</span>}
-          </p>
-          <div className="relative min-h-0 flex-1">
-            <List
-              listRef={listRef}
-              rowCount={rows.length}
-              rowHeight={ROW_HEIGHT}
-              rowComponent={RankingRow}
-              rowProps={{ rows, selfEx: exScore }}
-              style={{ position: "absolute", inset: 0 }}
-              className="overscroll-contain"
-            />
+          {/* BPIM2 のグローバルランキングの、順位のカードと同じ文言（全 N 人中 / 現在の順位） */}
+          {selfIndex >= 0 && (
+            <div className="flex shrink-0 items-center justify-between rounded-xl border border-muted-foreground/20 bg-secondary/40 px-3 py-2">
+              <div>
+                <p className="text-xs text-muted-foreground tabular-nums">全 {total} 人中</p>
+                {scope === "rival" && rows.length <= 1 && <p className="text-[10px] text-muted-foreground">フォロー中のライバルに記録がありません</p>}
+              </div>
+              <div className="text-right">
+                <span className="block text-[10px] text-muted-foreground">現在の順位</span>
+                <div className="font-mono text-lg leading-tight font-bold">
+                  <span className="text-primary">{rows[selfIndex].rank}</span>
+                  <span className="ml-0.5 text-xs">位</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+            <Header />
+            <div className="relative min-h-0 flex-1">
+              <List
+                listRef={listRef}
+                rowCount={rows.length}
+                rowHeight={ROW_HEIGHT}
+                rowComponent={RankingRow}
+                rowProps={{ rows, selfEx: exScore }}
+                style={{ position: "absolute", inset: 0 }}
+                className="overscroll-contain"
+              />
+            </div>
           </div>
         </>
       )}

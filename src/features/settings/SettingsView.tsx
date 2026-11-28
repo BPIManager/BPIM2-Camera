@@ -199,9 +199,11 @@ function CameraPage({
         />
       </Row>
       <div className="flex flex-col gap-2 border-b border-border py-3">
-        <Label>結果画面の最初のタブ</Label>
+        <Label>デフォルトタブ</Label>
         <p className="text-xs text-muted-foreground">
-          読み取り結果の下に最初に出すタブです。beat-seeker は、連携していないときは BPI を開きます
+          読み取り結果でデフォルト表示するタブを選択してください。
+          <br />
+          beat-seekerを連携していない場合、BPIタブが常に表示されます。
         </p>
         <ResultTabPicker
           value={settings.resultTab}
@@ -360,14 +362,14 @@ const PAGES: readonly PageInfo[] = [
   {
     key: "bpim2",
     title: "BPIM2",
-    hint: "サインイン・スコアログ",
+    hint: "アカウントを連携",
     icon: "/icons/bpim2.svg",
     parent: "account",
   },
   {
     key: "beatSeeker",
     title: "beat-seeker",
-    hint: "連携トークン",
+    hint: "アカウントを連携",
     icon: "/icons/beat-seeker.svg",
     parent: "account",
   },
