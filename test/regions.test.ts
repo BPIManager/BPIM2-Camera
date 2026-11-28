@@ -46,8 +46,9 @@ describe("guideRects", () => {
     const view = { width: 1000, height: 2000 };
     const a = guideRects(view);
     const b = guideRects(view, GUIDE_LAYOUTS["2P"]);
-    expect(b.score.x).toBeCloseTo(1000 - a.score.x - a.score.width);
-    expect(b.title.y).toBeCloseTo(a.title.y);
+    // 2P はパネルが右へ動く（スコア欄は 1P より右）
+    expect(b.score.x).toBeGreaterThan(a.score.x);
+    expect(b.score.y).toBeCloseTo(a.score.y);
     expect(GUIDE_LAYOUTS["1P"].title.x + GUIDE_LAYOUTS["1P"].title.width).toBeCloseTo(1);
   });
 });

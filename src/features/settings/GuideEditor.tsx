@@ -22,10 +22,12 @@ interface Props {
   /** 保存する枠と、その基準にした写真の縦横比（幅 / 高さ） */
   onSave: (layout: GuideLayout, aspect: number | null) => void;
   onClose: () => void;
+  /** 「初期位置」に戻すときの配置（プレーサイドの既定値）。既定は 1P */
+  defaultLayout?: GuideLayout;
 }
 
 /** 背景に好きなリザルト画像を置き、3 つの枠をドラッグ・四隅で拡大縮小して位置を決める */
-export default function GuideEditor({ initial, title = "枠の位置", closeLabel = "キャンセル", saveLabel = "保存", requireImage = false, initialAspect = null, viewSize, onSave, onClose }: Props) {
+export default function GuideEditor({ initial, title = "枠の位置", closeLabel = "キャンセル", saveLabel = "保存", requireImage = false, initialAspect = null, viewSize, onSave, onClose, defaultLayout = GUIDE_LAYOUTS["1P"] }: Props) {
   const [layout, setLayout] = useState<GuideLayout>(initial);
   const [bg, setBg] = useState<string | null>(null);
   // 枠は写真に対する割合で持つ。写真を選んだらその縦横比、なければ保存済みの縦横比、なければ表示領域と同じ
@@ -48,7 +50,7 @@ export default function GuideEditor({ initial, title = "枠の位置", closeLabe
           <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()}>
             <ImagePlus /> 画像
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setLayout(GUIDE_LAYOUTS["1P"])}>
+          <Button variant="ghost" size="sm" onClick={() => setLayout(defaultLayout)}>
             <RotateCcw /> 初期位置
           </Button>
         </div>

@@ -18,6 +18,8 @@ interface Props {
   getEngine: () => OcrEngine | null;
   /** 曲データ（曲名の行を、枠の手がかりにする） */
   songs: readonly SongMasterEntry[];
+  /** プレーサイドの設定（自動なら、1P・2P の両方で当てはめる） */
+  playSide: "1P" | "2P" | "auto";
   /** 枠を確定したとき。枠の中を切り出した画像を渡す */
   onConfirm: (regions: Record<GuideKey, Blob>, frames: Record<GuideKey, Rect>) => void;
   onCancel: () => void;
@@ -27,7 +29,7 @@ interface Props {
  * 取り込んだ画像に、撮影枠を合わせるステップ。まず自動で枠を置き、ずれていればユーザーが直して「読み取る」で確定する。
  * 確定したら、撮影と同じく、枠の中を切り出して読む
  */
-export default function ImportFrameEditor({ image, fallback, getEngine, songs, onConfirm, onCancel }: Props) {
+export default function ImportFrameEditor({ image, fallback, getEngine, songs, playSide, onConfirm, onCancel }: Props) {
   const [url, setUrl] = useState<string | null>(null);
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [layout, setLayout] = useState<GuideLayout>(fallback);
@@ -46,7 +48,7 @@ export default function ImportFrameEditor({ image, fallback, getEngine, songs, o
         if (!alive) return bmp.close();
         setBitmap(bmp);
         const engine = getEngine();
-        const fit = engine ? await detectFrames(bmp, engine, songs) : null;
+        const fit = engine ? await detectFrames(bmp, engine, songs, playSide) : null;
         if (!alive) return;
         if (fit) {
           setLayout(fit.layout);

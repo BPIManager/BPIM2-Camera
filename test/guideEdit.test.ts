@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isValidRect, MIN_SIZE, moveRect, resizeRect } from "@/lib/vision/guideEdit";
-import { GUIDE_KEYS, GUIDE_LAYOUTS, inferSide, migrateLegacyLayout, mirrorLayout, resolveLayout } from "@/lib/vision/guides";
+import { GUIDE_KEYS, GUIDE_LAYOUTS, inferSide, migrateLegacyLayout, resolveLayout, toOtherSide } from "@/lib/vision/guides";
 
 const r = { x: 0.3, y: 0.4, width: 0.2, height: 0.1 };
 
@@ -67,9 +67,9 @@ describe("migrateLegacyLayout", () => {
   const rect = (x: number) => ({ x, y: 0.1, width: 0.2, height: 0.1 });
   const full = { score: rect(0.1), title: rect(0.5), judge: rect(0.2) };
 
-  it("プレー側の調整があればそれを使い、反対側だけなら左右反転、なければ null", () => {
+  it("プレー側の調整があればそれを使い、反対側だけならもう一方の側へ移し、なければ null", () => {
     expect(migrateLegacyLayout("1P", { "1P": full })).toEqual(full);
-    expect(migrateLegacyLayout("2P", { "1P": full })).toEqual(mirrorLayout(full));
+    expect(migrateLegacyLayout("2P", { "1P": full })).toEqual(toOtherSide(full, "1P"));
     expect(migrateLegacyLayout("1P", {})).toBeNull();
   });
 
@@ -80,7 +80,7 @@ describe("migrateLegacyLayout", () => {
     expect(r.judge).toEqual(GUIDE_LAYOUTS["1P"].judge);
   });
 
-  it("既定の 3 枠は表示領域に収まり、1P と 2P で左右対称", () => {
+  it("既定の 3 枠は表示領域に収まり、2P はパネル（スコア・判定）を右へ、曲名を左下へ動かしたもの（左右反転ではない）", () => {
     for (const side of ["1P", "2P"] as const) {
       for (const k of GUIDE_KEYS) {
         const r = GUIDE_LAYOUTS[side][k];
@@ -90,6 +90,13 @@ describe("migrateLegacyLayout", () => {
         expect(r.y + r.height).toBeLessThanOrEqual(1.0001);
       }
     }
-    expect(GUIDE_LAYOUTS["2P"].judge.x).toBeCloseTo(1 - GUIDE_LAYOUTS["1P"].judge.x - GUIDE_LAYOUTS["1P"].judge.width);
+    const one = GUIDE_LAYOUTS["1P"], two = GUIDE_LAYOUTS["2P"];
+    // パネルの中の並び（スコアと判定の位置関係）は同じ
+    expect(two.judge.x - two.score.x).toBeCloseTo(one.judge.x - one.score.x);
+    expect(two.judge.y - two.score.y).toBeCloseTo(one.judge.y - one.score.y);
+    // 曲名は、パネルの左・下へ
+    expect(two.title.x + two.title.width).toBeLessThanOrEqual(two.score.x + 0.0001);
+    expect(two.title.y).toBeGreaterThan(one.title.y);
+    expect(toOtherSide(two, "2P").score.x).toBeCloseTo(one.score.x);
   });
 });

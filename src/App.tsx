@@ -19,6 +19,7 @@ import { useSampleUpload } from "@/hooks/useSampleUpload";
 import { useSettings } from "@/hooks/useSettings";
 import type { Size } from "@/lib/vision/framing";
 import { resolveLayout } from "@/lib/vision/guides";
+import { resolvePlaySide } from "@/lib/storage/settings";
 
 /** 撮影以外のタブは、タブ名のヘッダーを付ける（撮影はカメラ映像を全面に使う） */
 const HEADED_TABS: readonly Tab[] = ["history", "settings"];
@@ -63,7 +64,7 @@ export default function App() {
             busy={reader.busy}
             stage={reader.stage}
             song={reader.song}
-            layout={settings.layout}
+            layout={resolveLayout(settings.layout, resolvePlaySide(settings))}
             layoutAspect={settings.layoutAspect}
             onViewSize={onViewSize}
             onCapture={reader.read}
@@ -85,7 +86,8 @@ export default function App() {
       {importing && (
         <ImportFrameEditor
           image={importing}
-          fallback={resolveLayout(settings.layout)}
+          fallback={resolveLayout(settings.layout, resolvePlaySide(settings))}
+          playSide={settings.playSide}
           getEngine={getEngine}
           songs={songs}
           onCancel={() => setImporting(null)}
