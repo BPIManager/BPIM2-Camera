@@ -5,6 +5,7 @@ import type { Size } from "@/lib/vision/framing";
 import { GUIDE_LAYOUTS, inferSide, resolveLayout } from "@/lib/vision/guides";
 import PlaySidePicker from "@/components/play-side-picker";
 import AccountSection from "./AccountSection";
+import BeatSeekerLinkPanel from "@/features/beatSeeker/BeatSeekerLinkPanel";
 import CameraPicker from "@/components/camera-picker";
 import DebugSection from "./DebugSection";
 import LicensesSection from "./LicensesSection";
@@ -47,11 +48,18 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint?: 
   );
 }
 
-/** アカウント連携：BPIM2 のアカウントと、同期先 */
+/** アカウント連携：BPIM2 のアカウント・beat-seeker・同期先 */
 function AccountPage({ settings, update }: PageProps) {
   return (
     <>
       <AccountSection />
+      <section className="flex flex-col gap-3 border-b border-border py-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-sm font-medium">beat-seeker</h2>
+          <p className="text-xs text-muted-foreground">連携すると、読み取ったスコアで BEAT-PT・BEAT-TIER がどう変わるかを確かめ、beat-seeker に登録できます</p>
+        </div>
+        <BeatSeekerLinkPanel />
+      </section>
       <div className="flex flex-col gap-2 border-b border-border py-3">
         <Label>BPIM2 の同期先（既定）</Label>
         <p className="text-xs text-muted-foreground">結果画面の「BPIM2同期」で保存する先です。結果画面では、1 件ごとに変えられます</p>
@@ -182,7 +190,7 @@ function StatsPage({ settings, update }: PageProps) {
 type PageKey = "account" | "camera" | "ocr" | "models" | "stats";
 
 const PAGES: readonly { key: PageKey; title: string; hint: string; icon: LucideIcon }[] = [
-  { key: "account", title: "アカウント連携", hint: "BPIM2 のアカウント・同期先", icon: UserRound },
+  { key: "account", title: "アカウント連携", hint: "BPIM2 のアカウント・beat-seeker・同期先", icon: UserRound },
   { key: "camera", title: "カメラ設定", hint: "撮影枠・プレーサイド・カメラ・自動撮影・保存と共有", icon: Camera },
   { key: "ocr", title: "読み取り設定", hint: "読み取りの処理（GPU / CPU）", icon: Cpu },
   { key: "models", title: "モデル", hint: "取得済みのモデル・削除", icon: Package },

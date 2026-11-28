@@ -2,7 +2,7 @@ import { ChevronLeft } from "lucide-react";
 import type { Size } from "@/lib/vision/framing";
 import type { Settings } from "@/lib/storage/settings";
 import { cn } from "@/lib/utils";
-import { CalibrateStep, CameraStep, ConsentStep, HowToStep, OptionsStep, SignInStep, WelcomeStep } from "./steps";
+import { BeatSeekerStep, CalibrateStep, CameraStep, ConsentStep, HowToStep, OptionsStep, SignInStep, WelcomeStep } from "./steps";
 import { OcrStep } from "./OcrStep";
 
 interface Props {
@@ -12,9 +12,9 @@ interface Props {
   viewSize: Size;
 }
 
-const STEP_COUNT = 8;
+const STEP_COUNT = 9;
 
-/** 初回起動のセットアップ。同意 → サインイン → カメラ選択 → キャリブレーション → 使い方 → 読み取りの準備 → オプション → 改善への協力 */
+/** 初回起動のセットアップ。同意 → サインイン → beat-seeker との連携 → カメラ選択 → キャリブレーション → 使い方 → 読み取りの準備 → オプション → 改善への協力 */
 export default function Onboarding({ settings, update, viewSize }: Props) {
   const step = Math.min(Math.max(settings.onboardStep, 0), STEP_COUNT - 1);
   const go = (n: number) => update({ onboardStep: n });
@@ -42,12 +42,13 @@ export default function Onboarding({ settings, update, viewSize }: Props) {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
         {step === 0 && <WelcomeStep onAgree={() => update({ termsAcceptedAt: Date.now(), onboardStep: 1 })} />}
         {step === 1 && <SignInStep onNext={next} />}
-        {step === 2 && <CameraStep settings={settings} update={update} onNext={next} />}
-        {step === 3 && <CalibrateStep settings={settings} update={update} viewSize={viewSize} onNext={next} />}
-        {step === 4 && <HowToStep settings={settings} onNext={next} />}
-        {step === 5 && <OcrStep settings={settings} update={update} onNext={next} />}
-        {step === 6 && <OptionsStep settings={settings} update={update} onNext={next} />}
-        {step === 7 && <ConsentStep onDone={(statsConsent) => update({ statsConsent, onboarded: true, playSideChosen: true })} />}
+        {step === 2 && <BeatSeekerStep onNext={next} />}
+        {step === 3 && <CameraStep settings={settings} update={update} onNext={next} />}
+        {step === 4 && <CalibrateStep settings={settings} update={update} viewSize={viewSize} onNext={next} />}
+        {step === 5 && <HowToStep settings={settings} onNext={next} />}
+        {step === 6 && <OcrStep settings={settings} update={update} onNext={next} />}
+        {step === 7 && <OptionsStep settings={settings} update={update} onNext={next} />}
+        {step === 8 && <ConsentStep onDone={(statsConsent) => update({ statsConsent, onboarded: true, playSideChosen: true })} />}
       </div>
     </div>
   );

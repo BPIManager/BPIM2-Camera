@@ -33,6 +33,15 @@ const PROXY = {
   "/bpim2-api": { target: "https://bpi2.poyashi.me", changeOrigin: true, xfwd: true, rewrite: (p: string) => p.replace(/^\/bpim2-api/, "") },
 };
 
+/**
+ * 開発サーバーだけの中継。本番には置かない
+ * - /beat-seeker-api: beat-seeker の外部連携 API。開発サーバーのオリジン（localhost・tailscale）は CORS の許可リストにないため。
+ *   本番のビルドは、ブラウザから beat-seeker を直接呼ぶ（トークンを自分のサーバーに通さない。src/lib/beatSeeker/client.ts）
+ */
+const DEV_PROXY = {
+  "/beat-seeker-api": { target: "https://beat-seeker.onrender.com", changeOrigin: true, rewrite: (p: string) => p.replace(/^\/beat-seeker-api/, "") },
+};
+
 /** 開発・プレビューで隔離ヘッダーを付ける。サインイン用ページ（signin.html と、Firebase の中継 /__/auth/）は除く（Firebase のリダイレクトが阻まれるため） */
 function isolation(): Plugin {
   // 戻り値を返さない（関数を返すと Vite が「後処理フック」として呼んでしまう）
@@ -154,7 +163,7 @@ export default defineConfig(({ command }) => ({
   ],
   // tailscale serve 経由（*.ts.net）でスマホから開けるようにする
   // 分離されたページ（cross-origin isolated）にすると、OCR の WASM がマルチスレッドで動き、約 3 倍速くなる
-  server: { host: true, allowedHosts: [".ts.net"], proxy: PROXY },
+  server: { host: true, allowedHosts: [".ts.net"], proxy: { ...PROXY, ...DEV_PROXY } },
   preview: { proxy: PROXY },
   build: { rollupOptions: { input: { main: path.resolve(import.meta.dirname, "index.html"), signin: path.resolve(import.meta.dirname, "signin.html") } } },
   // onnxruntime-web の版は ortFlavor で出し分ける
