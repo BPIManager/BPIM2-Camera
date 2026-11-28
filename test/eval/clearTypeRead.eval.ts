@@ -13,7 +13,7 @@ const REGION = process.env.REGION === "clearTypeWide" ? "clearTypeWide" : "clear
 
 it("clear type read", async () => {
   const engine = await createNodeEngine("small");
-  const locs = readFileSync("internal/crop-locations.jsonl", "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  const locs = readFileSync(process.env.LOCS ?? "internal/crop-locations.jsonl", "utf8").trim().split("\n").map((l) => JSON.parse(l));
   const rows: { id: string; lines: { text: string; conf: number; x: number; w: number }[] | null }[] = [];
   for (const loc of locs) {
     const file = `internal/captures/${loc.id}_full.jpg`;

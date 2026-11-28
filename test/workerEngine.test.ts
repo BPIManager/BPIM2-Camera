@@ -10,15 +10,27 @@ class FakeWorker {
   onerror: ((e: ErrorEvent) => void) | null = null;
   terminated = false;
   hang = FakeWorker.hangNew;
+  /** true の間は、読み取りの返事を溜めておく（release で 1 件ずつ返す。同時に何件頼まれたかを調べる用） */
+  holdReplies = false;
+  held: number[] = [];
   constructor() {
     FakeWorker.created.push(this);
   }
   postMessage(msg: { id: number; type: string }) {
     if (msg.type === "config" || this.hang) return;
+    if (this.holdReplies && msg.type === "read") {
+      this.held.push(msg.id);
+      return;
+    }
     queueMicrotask(() => this.onmessage?.({ data: { id: msg.id, lines: [{ text: `w${FakeWorker.created.indexOf(this)}`, confidence: 99, box: [] }] } } as unknown as MessageEvent));
   }
   terminate() {
     this.terminated = true;
+  }
+  /** 溜めた返事を、先頭から 1 件返す */
+  release() {
+    const id = this.held.shift()!;
+    this.onmessage?.({ data: { id, lines: [{ text: `r${id}`, confidence: 99, box: [] }] } } as unknown as MessageEvent);
   }
 }
 
@@ -72,5 +84,44 @@ describe("OCR の Worker が返事をしないとき", () => {
     expect(FakeWorker.created).toHaveLength(1);
     e.dispose();
     await expect(read).rejects.not.toBeInstanceOf(OcrTimeoutError);
+  });
+});
+
+describe("同時に頼まれた読み取り", () => {
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it("Worker には 1 件ずつ頼み、頼まれた順に返す（同時に 2 件読ませない）", async () => {
+    const e = engine();
+    await e.warmUp();
+    const w = FakeWorker.created[0]!;
+    w.holdReplies = true;
+    const a = e.readLines(new ArrayBuffer(4));
+    const b = e.readLines(new ArrayBuffer(4));
+    const c = e.readLines(new ArrayBuffer(4));
+    await tick();
+    expect(w.held).toHaveLength(1);
+    w.release();
+    expect((await a)[0]!.text).toBe("r2");
+    await tick();
+    expect(w.held).toHaveLength(1);
+    w.release();
+    await b;
+    await tick();
+    expect(w.held).toHaveLength(1);
+    w.release();
+    expect((await c)[0]!.text).toBe("r4");
+  });
+
+  it("順番待ちの途中で止めたら、待っていた読み取りは失敗にし、Worker を作り直さない", async () => {
+    const e = engine();
+    await e.warmUp();
+    FakeWorker.created[0]!.holdReplies = true;
+    const a = e.readLines(new ArrayBuffer(4));
+    const b = e.readLines(new ArrayBuffer(4));
+    await tick();
+    e.dispose();
+    await expect(a).rejects.toThrow("disposed");
+    await expect(b).rejects.toThrow("disposed");
+    expect(FakeWorker.created).toHaveLength(1);
   });
 });

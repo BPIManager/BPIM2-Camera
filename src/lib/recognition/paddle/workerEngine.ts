@@ -46,6 +46,13 @@ export class WorkerOcrEngine implements OcrEngine {
   private pending = new Map<number, { resolve: (l: OcrLine[]) => void; reject: (e: Error) => void }>();
   /** 頼んだ時刻（記録用） */
   private sentAt = new Map<number, number>();
+  /**
+   * 読み取りの順番待ち。Worker は、同時に 2 件を読めない（同じモデルのセッションを同時に使うと、返事が来なくなったり、0 行になったりする）。
+   * 使用オプション・クリアランプなど、複数の読み取りが同時に頼まれても、1 件ずつ頼む
+   */
+  private tail: Promise<unknown> = Promise.resolve();
+  /** dispose のたびに増やす。止めたあとに、順番待ちの読み取りが Worker を作り直さないようにする */
+  private generation = 0;
 
   constructor(
     private readonly createWorker: () => Worker,
@@ -142,7 +149,15 @@ export class WorkerOcrEngine implements OcrEngine {
     return this.call({ type: "warmup" });
   }
 
-  async readLines(image: OcrImage): Promise<OcrLine[]> {
+  readLines(image: OcrImage): Promise<OcrLine[]> {
+    const generation = this.generation;
+    const run = () => (generation === this.generation ? this.readNow(image) : Promise.reject(new Error("disposed")));
+    const result = this.tail.then(run, run);
+    this.tail = result.catch(() => undefined);
+    return result;
+  }
+
+  private async readNow(image: OcrImage): Promise<OcrLine[]> {
     // 上限を設けるとき（モデルの読み込み済み）だけ、読み直し用の写しを取っておく
     const spare = this.loaded ? copyImage(image) : null;
     try {
@@ -162,6 +177,7 @@ export class WorkerOcrEngine implements OcrEngine {
   /** Worker を止めて、メモリを返す（待っていた呼び出しは失敗にする） */
   dispose() {
     if (this.worker) this.log("Worker を止める（dispose）");
+    this.generation++;
     this.restart(new Error("disposed"));
   }
 }
