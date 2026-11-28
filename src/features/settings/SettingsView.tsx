@@ -91,7 +91,7 @@ export default function SettingsView({ settings, update, viewSize, installable, 
       <div className="flex flex-col gap-2 border-b border-border py-3">
         <Label>プレーサイド</Label>
         <p className="text-xs text-muted-foreground">2P のリザルト画面は、スコア・判定の欄が右、曲名が左下になります。自動は、撮影枠の位置から判断します</p>
-        <PlaySidePicker value={settings.playSide} inferred={settings.layout ? inferSide(settings.layout) : "1P"} onChange={(playSide) => update({ playSide })} />
+        <PlaySidePicker value={settings.playSide} inferred={settings.layout ? inferSide(settings.layout) : "1P"} onChange={(playSide) => update({ playSide, playSideChosen: true })} />
       </div>
       <div className="flex flex-col gap-2 border-b border-border py-3">
         <Label>BPIM2 の同期先（既定）</Label>

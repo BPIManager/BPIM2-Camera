@@ -35,6 +35,8 @@ export interface Settings {
   ocrBenchmark: OcrBenchmarkResult | null;
   /** プレーサイド。auto は、枠の配置（スコア欄の枠が左右どちらか）から推定する */
   playSide: PlaySide | "auto";
+  /** プレーサイドを選んだ（セットアップ・設定・起動時の確認のどれか）。選んでいなければ、起動時に 1 回だけ確かめる */
+  playSideChosen: boolean;
 }
 
 const KEY = "bpim2-camera:settings";
@@ -59,6 +61,7 @@ export function defaultSettings(): Settings {
     ocrBackend: null,
     ocrBenchmark: null,
     playSide: "auto",
+    playSideChosen: false,
   };
 }
 
@@ -75,7 +78,7 @@ export function loadSettings(storage: Pick<Storage, "getItem" | "setItem"> = loc
       const aspect = typeof parsed.layoutAspect === "number" && parsed.layoutAspect > 0.2 && parsed.layoutAspect < 5 ? parsed.layoutAspect : null;
       // 縦横比が分からない枠は、旧来どおり表示領域全体への割合として扱う
       // 壊れた値は既定に戻す
-      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET, cameraId: typeof parsed.cameraId === "string" && parsed.cameraId ? parsed.cameraId : null, ocrBackend: parsed.ocrBackend === "gpu" || parsed.ocrBackend === "cpu" ? parsed.ocrBackend : null, playSide: playSide === "1P" || playSide === "2P" ? playSide : "auto" };
+      return { ...parsed, layout, layoutAspect: layout ? aspect : null, syncTarget: isSyncTarget(parsed.syncTarget) ? parsed.syncTarget : DEFAULT_SYNC_TARGET, cameraId: typeof parsed.cameraId === "string" && parsed.cameraId ? parsed.cameraId : null, ocrBackend: parsed.ocrBackend === "gpu" || parsed.ocrBackend === "cpu" ? parsed.ocrBackend : null, playSide: playSide === "1P" || playSide === "2P" ? playSide : parsed.playSide, playSideChosen: parsed.playSideChosen === true || playSide === "1P" || playSide === "2P" };
     }
   } catch {
     /* 壊れた値や private モードでは既定値で動かす */
@@ -92,6 +95,9 @@ export function saveSettings(s: Settings, storage: Pick<Storage, "getItem" | "se
     /* 保存できなくてもセッション内では動く */
   }
 }
+
+/** 起動時にプレーサイドを確かめるか（セットアップを済ませていて、まだ選んでいない人。旧版で選んでいた人は選んだものとする） */
+export const needsPlaySidePrompt = (s: Pick<Settings, "onboarded" | "playSideChosen">): boolean => s.onboarded && !s.playSideChosen;
 
 /** 使うプレーサイド。設定が自動なら、枠の配置から推定する（キャリブレーション前は 1P） */
 export function resolvePlaySide(s: Pick<Settings, "playSide" | "layout">): PlaySide {

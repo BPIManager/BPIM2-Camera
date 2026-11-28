@@ -47,7 +47,7 @@ export default function Onboarding({ settings, update, viewSize }: Props) {
         {step === 4 && <HowToStep settings={settings} onNext={next} />}
         {step === 5 && <OcrStep settings={settings} update={update} onNext={next} />}
         {step === 6 && <OptionsStep settings={settings} update={update} onNext={next} />}
-        {step === 7 && <ConsentStep onDone={(statsConsent) => update({ statsConsent, onboarded: true })} />}
+        {step === 7 && <ConsentStep onDone={(statsConsent) => update({ statsConsent, onboarded: true, playSideChosen: true })} />}
       </div>
     </div>
   );
