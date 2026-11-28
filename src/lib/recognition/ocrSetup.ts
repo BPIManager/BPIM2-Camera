@@ -4,6 +4,7 @@ import { createOcrWorker, WorkerOcrEngine } from "./paddle/workerEngine";
 import type { Recognizer } from "./recognizer";
 import type { OcrEngine } from "./paddle/engine";
 import type { SongMasterEntry } from "@/lib/songs/types";
+import { logEvent } from "@/lib/debug/ocrLog";
 
 /** 読み取りの処理。gpu は WebGPU、cpu は WASM（マルチスレッド） */
 export type OcrBackend = "gpu" | "cpu";
@@ -26,8 +27,10 @@ export interface OcrSetup {
  */
 export function createOcrSetup(backend: OcrBackend, getMaster: () => readonly SongMasterEntry[]): OcrSetup {
   const ep = backend === "gpu" ? "webgpu" : "wasm";
-  const titleWorker = new WorkerOcrEngine(createOcrWorker(backend), { ep });
-  const passWorker = backend === "cpu" ? new WorkerOcrEngine(createOcrWorker(backend), { ep }) : undefined;
+  // 開発中は、Worker とのやりとりを記録する（読み取りが止まったときに、どこで止まったかを見るため）
+  const log = (name: string) => (import.meta.env.DEV ? (m: string) => logEvent(`ocr:${name}`, m) : undefined);
+  const titleWorker = new WorkerOcrEngine(createOcrWorker(backend), { ep }, undefined, log("title"));
+  const passWorker = backend === "cpu" ? new WorkerOcrEngine(createOcrWorker(backend), { ep }, undefined, log("pass")) : undefined;
   const workers = passWorker ? [titleWorker, passWorker] : [titleWorker];
   // 撮影も取り込みも、枠で切り出した 3 か所を PaddleOCR で読む
   const recognizer = new PaddleRecognizer(titleWorker, getMaster, {

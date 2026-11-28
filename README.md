@@ -207,6 +207,15 @@ tailscale serve --bg --https=8443 5183
 tailscale serve --https=8443 off   # stop publishing
 ```
 
+While the dev server is running, the phone sends debug logs to the PC. They are printed in the terminal and appended to `internal/debug.log` (gitignored). Each line carries the phone's time and a tag:
+
+- `read`: each stage of a read, with the time since the shot
+- `ocr:title` / `ocr:pass`: each request to the OCR workers, its reply time, timeouts and restarts
+- `camera`: opening and stopping the camera, play failures, track `ended`/`mute`, and the stall watchdog
+- `app` / `error`: going to the background and back, uncaught errors and unhandled rejections
+
+Captured images go to `internal/captures`. Production builds send nothing.
+
 ## Stack
 
 Vite, React 19, TypeScript, Tailwind CSS v4, shadcn-style UI (Radix, vaul, sonner), idb (IndexedDB), PaddleOCR on onnxruntime-web, Firebase Auth, Google Tag Manager. Path alias: `@/` → `src/`.
