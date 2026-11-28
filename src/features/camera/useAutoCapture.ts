@@ -10,7 +10,10 @@ import {
 } from "@/lib/vision/autoCapture";
 import { frameDiff, type Gray } from "@/lib/vision/frame";
 import type { Size } from "@/lib/vision/framing";
-import type { GuideKey, GuideRects } from "@/lib/vision/guides";
+import type { GuideRects } from "@/lib/vision/guides";
+import type { PreviewRegions } from "@/hooks/useCamera";
+import type { Rect } from "@/lib/vision/framing";
+import { overlap, snapJudgeFrame } from "@/lib/vision/judgeSnap";
 
 interface Args {
   /** 下見を使えるか（自動撮影がオンで、カメラが映っているとき）。この間、tiny の OCR を保持する */
@@ -20,10 +23,7 @@ interface Args {
   /** 一時停止（読み取り中）。OCR は保持したまま、下見だけ止める */
   paused: boolean;
   grabGray: () => Gray | null;
-  grabRegions: (guides: {
-    rects: GuideRects;
-    view: Size;
-  }) => Promise<Record<GuideKey, ArrayBuffer> | null>;
+  grabRegions: (guides: { rects: GuideRects; view: Size }) => Promise<PreviewRegions | null>;
   guides: { rects: GuideRects; view: Size };
   /** 撮影してよいとき（シャッターと同じ撮影を始める） */
   onTrigger: () => void;
@@ -42,8 +42,10 @@ export function useAutoCapture({
   guides,
   onTrigger,
   backend,
-}: Args): boolean {
+}: Args): { detected: boolean; judgeSnap: Rect | null } {
   const [detected, setDetected] = useState(false);
+  // 判定表の枠を、見出しの位置から合わせ直した位置（表示の座標）。2 回続けて近い位置になったときだけ採る
+  const [judgeSnap, setJudgeSnap] = useState<Rect | null>(null);
   // 下見の最中に最新の値を使えるよう、ref に持つ（下見のたびに作り直さない）
   const latest = useRef({ guides, onTrigger, grabGray, grabRegions, paused });
   latest.current = { guides, onTrigger, grabGray, grabRegions, paused };
@@ -57,6 +59,8 @@ export function useAutoCapture({
     let prev: Gray | null = null;
     let wasPaused = false;
     let stopped = false;
+    let lastSnap: Rect | null = null;
+    let misses = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     void engine.warmUp().catch(() => undefined);
 
@@ -83,12 +87,22 @@ export function useAutoCapture({
               );
               if (crops && !stopped && !latest.current.paused) {
                 const [score, title, judge] = await Promise.all([
-                  engine.readLines(crops.score),
-                  engine.readLines(crops.title),
-                  engine.readLines(crops.judge),
+                  engine.readLines(crops.crops.score),
+                  engine.readLines(crops.crops.title),
+                  engine.readLines(crops.crops.judge),
                 ]);
                 const p = screenPlausible({ score, title, judge });
                 plausible = p.all;
+                // 判定表の枠の合わせ直し。2 回続けて近い位置なら採る。2 回続けて見出しが見つからなければ外す
+                const snap = snapJudgeFrame(judge, crops.judge.area, crops.judge.size);
+                if (snap) {
+                  misses = 0;
+                  if (lastSnap && overlap(lastSnap, snap) > 0.6) setJudgeSnap(snap);
+                  lastSnap = snap;
+                } else if (++misses >= 2) {
+                  lastSnap = null;
+                  setJudgeSnap(null);
+                }
               }
             }
             if (!stopped && !latest.current.paused) {
@@ -113,8 +127,9 @@ export function useAutoCapture({
       clearTimeout(timer);
       engine.dispose();
       setDetected(false);
+      setJudgeSnap(null);
     };
   }, [enabled, backend]);
 
-  return enabled && !paused && detected;
+  return { detected: enabled && !paused && detected, judgeSnap: enabled ? judgeSnap : null };
 }
