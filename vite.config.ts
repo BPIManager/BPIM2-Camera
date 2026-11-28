@@ -151,7 +151,7 @@ export default defineConfig(({ command }) => ({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,png,json}"],
+        globPatterns: ["**/*.{js,css,html,png,svg,json}"],
         // サインインページと Firebase の中継（/__/auth/handler など）はアプリ本体に置き換えず、そのまま取得する
         // （/__/ を除外しないと、プロバイダからの戻りの遷移に index.html が返り、サインインが完了しない）
         navigateFallbackDenylist: [/^\/signin\.html/, /^\/__\//],

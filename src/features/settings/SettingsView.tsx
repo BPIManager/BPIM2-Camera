@@ -7,7 +7,6 @@ import {
   Cpu,
   Link2,
   Package,
-  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import Button from "@/components/ui/button";
@@ -83,7 +82,7 @@ function AccountPage({
     <>
       <PageMenu parent="account" onOpen={onOpen} />
       <div className="flex flex-col gap-2 border-b border-border py-3">
-        <Label>同期先（既定）</Label>
+        <Label>既定のスコア保存先</Label>
         <p className="text-xs text-muted-foreground">
           結果画面で同期するときに、スコアを保存するバージョンです。結果画面では、1
           件ごとに変えられます。beat-seeker は最新バージョンだけに登録できます
@@ -317,7 +316,8 @@ interface PageInfo {
   key: PageKey;
   title: string;
   hint: string;
-  icon: LucideIcon;
+  /** アイコン。連携先のページは、そのサービスの favicon（public/icons の画像のパス） */
+  icon: LucideIcon | string;
   /** 親のページ（戻る先）。トップの一覧に出すページは null */
   parent: PageKey | null;
 }
@@ -327,7 +327,7 @@ const PAGES: readonly PageInfo[] = [
     key: "account",
     title: "アカウント連携",
     hint: "BPIM2・beat-seeker・同期先",
-    icon: UserRound,
+    icon: Link2,
     parent: null,
   },
   {
@@ -362,14 +362,14 @@ const PAGES: readonly PageInfo[] = [
     key: "bpim2",
     title: "BPIM2",
     hint: "サインイン・スコアログ",
-    icon: UserRound,
+    icon: "/icons/bpim2.svg",
     parent: "account",
   },
   {
     key: "beatSeeker",
     title: "beat-seeker",
     hint: "連携トークン",
-    icon: Link2,
+    icon: "/icons/beat-seeker.svg",
     parent: "account",
   },
 ];
@@ -392,10 +392,14 @@ function PageMenu({
             onClick={() => onOpen(key)}
             className="flex items-center gap-3 border-b border-border py-3 text-left"
           >
-            <Icon
-              className="size-5 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
+            {typeof Icon === "string" ? (
+              <img src={Icon} alt="" className="size-5 shrink-0 rounded-sm" />
+            ) : (
+              <Icon
+                className="size-5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            )}
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-sm font-medium">{title}</span>
               <span className="truncate text-xs text-muted-foreground">
