@@ -24,15 +24,24 @@ export async function detectFrames(image: ImageBitmap, engine: OcrEngine, master
   return fitFrames(findAnchors(lines, { width, height }, titleScore), CANONICAL_LAYOUT, { width, height }, 2);
 }
 
+/** 枠（画像に対する割合）を、画像の画素の位置にする */
+export function layoutToPixels(layout: GuideLayout, size: { width: number; height: number }): Record<GuideKey, { x: number; y: number; width: number; height: number }> {
+  return Object.fromEntries(
+    GUIDE_KEYS.map((k) => {
+      const r = layout[k];
+      const x = Math.max(0, Math.round(r.x * size.width));
+      const y = Math.max(0, Math.round(r.y * size.height));
+      return [k, { x, y, width: Math.max(1, Math.min(size.width - x, Math.round(r.width * size.width))), height: Math.max(1, Math.min(size.height - y, Math.round(r.height * size.height))) }];
+    }),
+  ) as Record<GuideKey, { x: number; y: number; width: number; height: number }>;
+}
+
 /** 画像から、枠（画像に対する割合）の中を切り出す。撮影したときの切り出しと同じく JPEG にする */
 export async function cropRegions(image: ImageBitmap, layout: GuideLayout): Promise<Record<GuideKey, Blob>> {
+  const px = layoutToPixels(layout, image);
   const entries = await Promise.all(
     GUIDE_KEYS.map(async (k) => {
-      const r = layout[k];
-      const x = Math.max(0, Math.round(r.x * image.width));
-      const y = Math.max(0, Math.round(r.y * image.height));
-      const w = Math.max(1, Math.min(image.width - x, Math.round(r.width * image.width)));
-      const h = Math.max(1, Math.min(image.height - y, Math.round(r.height * image.height)));
+      const { x, y, width: w, height: h } = px[k];
       const c = new OffscreenCanvas(w, h);
       c.getContext("2d")!.drawImage(image, x, y, w, h, 0, 0, w, h);
       return [k, await c.convertToBlob({ type: "image/jpeg", quality: 0.92 })] as const;

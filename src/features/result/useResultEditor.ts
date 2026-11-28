@@ -17,6 +17,9 @@ export function useResultEditor(draft: Draft, version: string) {
   const showManualEx = manualEx;
 
   const exScore = exText === "" ? null : Number(exText);
+  // 使用オプション。読み取りは結果を出したあとに届く（draft が更新される）ので、手で選ぶまでは読み取りの値に従う
+  const [optionPick, setOptionPick] = useState<{ value: string | null } | null>(null);
+  const useOption = optionPick ? optionPick.value : (draft.raw?.useOption ?? null);
   const valid = chart !== null && exScore !== null && isExScoreInRange(exScore, chart.notes);
 
   const unsupported = chart !== null && initialBpiStatus(chart.level) === "unsupported-level";
@@ -44,8 +47,9 @@ export function useResultEditor(draft: Draft, version: string) {
     const fields: string[] = [];
     if (chart && chart.songId !== draft.resolution?.chart?.songId) fields.push("song");
     if (exScore !== (draft.resolution?.exScore ?? null)) fields.push("exScore");
+    if (optionPick && optionPick.value !== (draft.raw?.useOption ?? null)) fields.push("useOption");
     return fields;
-  }, [chart, exScore, draft.resolution]);
+  }, [chart, exScore, draft.resolution, draft.raw, optionPick]);
 
   const record: ResultRecord | null =
     chart && valid && exScore !== null
@@ -61,7 +65,7 @@ export function useResultEditor(draft: Draft, version: string) {
           clearType: draft.raw?.clearType ?? null,
           bestClearType: draft.raw?.bestClearType ?? null,
           djLevel: draft.raw?.djLevel ?? null,
-          useOption: draft.raw?.useOption ?? null,
+          useOption,
           bpi: bpi?.bpi ?? null,
           bpiStatus: bpi?.status ?? initialBpiStatus(chart.level),
           estimatedRank: bpi?.estimatedRank ?? null,
@@ -81,6 +85,9 @@ export function useResultEditor(draft: Draft, version: string) {
       setExText("");
       setManualEx(true);
     },
+    /** 使用オプション（読み取り、または手で選んだもの）。分からなければ null */
+    useOption,
+    setUseOption: (value: string | null) => setOptionPick({ value }),
     record,
     /** チャート用の BPI 曲線・アリーナ平均。まだなら null */
     outcome: chartOutcome,

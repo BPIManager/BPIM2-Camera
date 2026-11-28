@@ -6,7 +6,7 @@ import { useCamera } from "@/hooks/useCamera";
 import { useAutoCapture } from "./useAutoCapture";
 import type { OcrBackend } from "@/lib/recognition/ocrSetup";
 import type { SongProgress } from "@/lib/recognition/recognizer";
-import type { Size } from "@/lib/vision/framing";
+import type { Rect, Size } from "@/lib/vision/framing";
 import { cn } from "@/lib/utils";
 import { moveRect, resizeRect, type Corner } from "@/lib/vision/guideEdit";
 import { GUIDE_KEYS, GUIDE_LABELS, layoutToRects, referenceRect, resolveLayout, type GuideKey, type GuideLayout } from "@/lib/vision/guides";
@@ -24,7 +24,7 @@ interface Props {
   layoutAspect: number | null;
   /** 表示領域の大きさ。設定の枠調整で同じ縦横比を使う */
   onViewSize: (size: Size) => void;
-  onCapture: (image: Blob, source: "camera", regions?: Record<GuideKey, Blob>) => void;
+  onCapture: (image: Blob, source: "camera", regions?: Record<GuideKey, Blob>, frames?: Record<GuideKey, Rect>) => void;
   /** 画像を取り込んだとき（枠を合わせるステップに進む） */
   onImport: (image: Blob) => void;
   /** 読み取りの中止（読み取り中にシャッターボタンを押したとき） */
@@ -154,7 +154,7 @@ export default function CameraView({ active, busy, stage, song, layout, layoutAs
     const shot = await snapshot({ rects, view });
     if (!shot) return;
     setFrozen(URL.createObjectURL(shot.image));
-    onCapture(shot.image, "camera", shot.regions);
+    onCapture(shot.image, "camera", shot.regions, shot.frames);
   };
   // 自動撮影: 静止して、枠に画面が合ったら、シャッターを押したのと同じ撮影を始める。
   // 結果の画面が開いている間（active が false）は止め、読み取り中は一時停止する

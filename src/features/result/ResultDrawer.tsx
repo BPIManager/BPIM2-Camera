@@ -22,6 +22,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import Input from "@/components/ui/input";
+import ResultDetails from "./ResultDetails";
 import Label from "@/components/ui/label";
 import { REFERENCE_VERSION } from "@/lib/bpi/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -326,6 +327,7 @@ export default function ResultDrawer({
                   0〜{ed.chart.notes * 2} の範囲で入力してください
                 </p>
               )}
+              <ResultDetails useOption={ed.useOption} onUseOption={ed.setUseOption} />
             </div>
           </div>
 

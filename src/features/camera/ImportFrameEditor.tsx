@@ -5,7 +5,8 @@ import Button from "@/components/ui/button";
 import type { OcrEngine } from "@/lib/recognition/paddle/engine";
 import type { SongMasterEntry } from "@/lib/songs/types";
 import type { GuideKey, GuideLayout } from "@/lib/vision/guides";
-import { cropRegions, detectFrames } from "@/lib/vision/importFrames";
+import type { Rect } from "@/lib/vision/framing";
+import { cropRegions, detectFrames, layoutToPixels } from "@/lib/vision/importFrames";
 
 type Detect = "running" | "found" | "missed";
 
@@ -18,7 +19,7 @@ interface Props {
   /** 曲データ（曲名の行を、枠の手がかりにする） */
   songs: readonly SongMasterEntry[];
   /** 枠を確定したとき。枠の中を切り出した画像を渡す */
-  onConfirm: (regions: Record<GuideKey, Blob>) => void;
+  onConfirm: (regions: Record<GuideKey, Blob>, frames: Record<GuideKey, Rect>) => void;
   onCancel: () => void;
 }
 
@@ -97,7 +98,7 @@ export default function ImportFrameEditor({ image, fallback, getEngine, songs, o
             if (!bitmap) return;
             setCropping(true);
             try {
-              onConfirm(await cropRegions(bitmap, layout));
+              onConfirm(await cropRegions(bitmap, layout), layoutToPixels(layout, bitmap));
             } finally {
               setCropping(false);
             }
