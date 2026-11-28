@@ -15,6 +15,9 @@ import { GUIDE_LAYOUTS, inferSide, resolveLayout } from "@/lib/vision/guides";
 import PlaySidePicker from "@/components/play-side-picker";
 import AccountSection from "./AccountSection";
 import BeatSeekerLinkPanel from "@/features/beatSeeker/BeatSeekerLinkPanel";
+import { useAuth } from "@/hooks/useAuth";
+import { useBpim2Profile } from "@/hooks/useBpim2Profile";
+import { useBeatSeekerLink } from "@/hooks/useBeatSeekerLink";
 import CameraPicker from "@/components/camera-picker";
 import DebugSection from "./DebugSection";
 import LicensesSection from "./LicensesSection";
@@ -85,7 +88,7 @@ function AccountPage({
         <Label>既定のスコア保存先</Label>
         <p className="text-xs text-muted-foreground">
           結果画面で同期するときに、スコアを保存するバージョンです。結果画面では、1
-          件ごとに変えられます。beat-seeker は最新バージョンだけに登録できます
+          件ごとに変えられます。
         </p>
         <SyncTargetPicker
           value={settings.syncTarget}
@@ -374,6 +377,20 @@ const PAGES: readonly PageInfo[] = [
   },
 ];
 
+/**
+ * 連携先のページの一覧に出す、いまの状態。サインイン・連携していれば、そのアカウント（なければ、ページの説明のまま）
+ */
+function useAccountHints(): Partial<Record<PageKey, string>> {
+  const { user } = useAuth();
+  const { profile } = useBpim2Profile(user);
+  const beatSeeker = useBeatSeekerLink();
+  const bpim2Name = user ? (profile?.userName ?? user.displayName ?? user.email ?? user.uid) : null;
+  return {
+    ...(bpim2Name ? { bpim2: `サインイン中：${bpim2Name}` } : {}),
+    ...(beatSeeker ? { beatSeeker: `連携中：${beatSeeker.me.displayName}` } : {}),
+  };
+}
+
 /** ページの一覧（押すとそのページを開く） */
 function PageMenu({
   parent,
@@ -382,6 +399,7 @@ function PageMenu({
   parent: PageKey | null;
   onOpen: (key: PageKey) => void;
 }) {
+  const hints = useAccountHints();
   return (
     <nav className="flex flex-col">
       {PAGES.filter((p) => p.parent === parent).map(
@@ -403,7 +421,7 @@ function PageMenu({
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-sm font-medium">{title}</span>
               <span className="truncate text-xs text-muted-foreground">
-                {hint}
+                {hints[key] ?? hint}
               </span>
             </span>
             <ChevronRight
