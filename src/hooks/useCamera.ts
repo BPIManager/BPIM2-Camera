@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openCameraStream } from "@/lib/camera/stream";
+import { logEvent } from "@/lib/debug/ocrLog";
 import { guideToVideoRect, type Rect, type Size } from "@/lib/vision/framing";
 import { STILL_FRAME_WIDTH } from "@/lib/vision/autoCapture";
 import { toGray, type Gray } from "@/lib/vision/frame";
@@ -64,15 +65,23 @@ export function useCamera(enabled: boolean, deviceId: string | null = null) {
     let cancelled = false;
     setState("starting");
     setZoomInfo(null);
+    logEvent("camera", `開く（${restartKey > 0 ? `開き直し ${restartKey} 回目` : "初回"}）`);
     openCameraStream(deviceId)
       .then(async (s) => {
         if (cancelled) {
+          logEvent("camera", "開いたが、もう要らないので止める");
           s.getTracks().forEach((t) => t.stop());
           return;
         }
         stream = s;
         const track = s.getVideoTracks()[0] ?? null;
         trackRef.current = track;
+        if (track) {
+          // 端末にカメラを止められた・一時的に映像が来なくなった、を記録する
+          track.addEventListener("ended", () => logEvent("camera", "track が ended になった"));
+          track.addEventListener("mute", () => logEvent("camera", "track が mute になった"));
+          track.addEventListener("unmute", () => logEvent("camera", "track の mute が解けた"));
+        }
         const hw = (track?.getCapabilities?.() as ZoomCapabilities | undefined)?.zoom;
         if (hw && hw.max > hw.min) {
           setZoomInfo({ min: hw.min, max: hw.max, step: hw.step || 0.1, digital: false });
@@ -86,13 +95,18 @@ export function useCamera(enabled: boolean, deviceId: string | null = null) {
         const v = videoRef.current;
         if (v) {
           v.srcObject = s;
-          await v.play().catch(() => undefined);
+          await v.play().catch((e: unknown) => logEvent("camera", `再生を始められない: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`));
         }
+        logEvent("camera", `準備できた（${track?.getSettings?.().width ?? "?"}x${track?.getSettings?.().height ?? "?"}・再生${v?.paused ? "停止中" : "中"}）`);
         setState("ready");
       })
-      .catch(() => !cancelled && setState("denied"));
+      .catch((e: unknown) => {
+        logEvent("camera", `開けない: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`);
+        if (!cancelled) setState("denied");
+      });
     return () => {
       cancelled = true;
+      if (stream) logEvent("camera", "止める");
       cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
       pendingZoomRef.current = null;
@@ -117,20 +131,26 @@ export function useCamera(enabled: boolean, deviceId: string | null = null) {
       if (!v) return;
       // カメラが止められた：開き直す
       if (!track || track.readyState === "ended") {
+        logEvent("camera", "見張り: カメラが止められている。開き直す");
         setRestartKey((k) => k + 1);
         return;
       }
       // 再生が止まっている：再生し直す
       if (v.paused) {
-        void v.play().catch(() => undefined);
+        logEvent("camera", "見張り: 再生が止まっている。再生し直す");
+        void v.play().catch((e: unknown) => logEvent("camera", `再生し直せない: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`));
         return;
       }
       // 再生中なのに、コマが進まない状態が続く：開き直す
       stalled = v.currentTime === lastTime ? stalled + 1 : 0;
       lastTime = v.currentTime;
-      if (stalled >= STALL_CHECKS) setRestartKey((k) => k + 1);
+      if (stalled >= STALL_CHECKS) {
+        logEvent("camera", `見張り: コマが ${STALL_CHECKS} 回続けて進まない（track: ${track.readyState}${track.muted ? "・mute" : ""}）。開き直す`);
+        setRestartKey((k) => k + 1);
+      }
     };
     const onVisible = () => {
+      logEvent("camera", `表示: ${document.visibilityState}`);
       if (document.visibilityState !== "visible") return;
       lastTime = -1;
       stalled = 0;

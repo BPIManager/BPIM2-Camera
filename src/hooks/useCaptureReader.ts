@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { Draft } from "@/features/result/draft";
 import { isAbortError, raceAbort } from "@/lib/async/abort";
-import { logDebug, saveCaptures } from "@/lib/debug/ocrLog";
+import { logDebug, logEvent, saveCaptures } from "@/lib/debug/ocrLog";
 import type { OcrTrace, Recognizer, SongProgress } from "@/lib/recognition/recognizer";
 import { resolveResult } from "@/lib/recognition/resolve";
 import type { SongMasterEntry } from "@/lib/songs/types";
@@ -54,6 +54,8 @@ export function useCaptureReader({
   const read = async (image: Blob, source: CaptureSource, regions?: Record<GuideKey, Blob>, frames?: Record<GuideKey, Rect>) => {
     setBusy(true);
     setStage("画像を準備しています");
+    const t0 = performance.now();
+    logEvent("read", `読み取りを始める（${source}・${Math.round(image.size / 1024)}KB・表示: ${document.visibilityState}）`);
     setSong(null);
     const controller = new AbortController();
     abortRef.current = controller;
@@ -88,7 +90,23 @@ export function useCaptureReader({
       // 画像は、読み取りが（中止後に遅れて）終わるまで閉じない
       // 認識器の準備ができていない（処理の切り替え直後など）ときも、読み取りの失敗として扱う
       const task = Promise.resolve()
-        .then(() => getRecognizer().recognize({ full, regions: crops, onStage: setStage, onSong: setSong, onTrace: (t) => (ocr = t), signal: controller.signal }))
+        .then(() =>
+          getRecognizer().recognize({
+            full,
+            regions: crops,
+            onStage: (label) => {
+              // 開発中は、段階が変わった時刻を記録する（どこで止まったかを見るため）
+              logEvent("read", `${Math.round(performance.now() - t0)}ms 段階: ${label}`);
+              setStage(label);
+            },
+            onSong: (s) => {
+              logEvent("read", `${Math.round(performance.now() - t0)}ms 曲: ${s.kind === "resolved" ? s.title : "確定できず"}`);
+              setSong(s);
+            },
+            onTrace: (t) => (ocr = t),
+            signal: controller.signal,
+          }),
+        )
         .finally(() => {
           full.close();
           if (crops) for (const b of Object.values(crops)) b.close();
@@ -103,6 +121,7 @@ export function useCaptureReader({
         return null;
       });
       if (!raw && !cancelled) logDebug("読み取り結果なし（何も読めなかった）");
+      logEvent("read", `${Math.round(performance.now() - t0)}ms 読み取りを終える（${cancelled ? "中止" : raw ? "結果あり" : "結果なし"}）`);
     } finally {
       setBusy(false);
       setStage(null);
@@ -130,6 +149,7 @@ export function useCaptureReader({
     if (optionPixels && engine && raw) {
       void readUseOption(optionPixels, engine)
         .then((useOption) => {
+          logEvent("read", `使用オプション: ${useOption ?? "読めず"}`);
           if (useOption) setDraft((d) => (d && d.id === next.id && d.raw ? { ...d, raw: { ...d.raw, useOption } } : d));
         })
         .catch(() => undefined);
