@@ -426,12 +426,12 @@ export function ConsentStep({
       }
     >
       <ul className="flex list-disc flex-col gap-3 pl-5 text-sm leading-relaxed text-muted-foreground">
-        <li>曲名及びスコアの判定結果を文字と画像で保存します。</li>
+        <li>撮影した写真と、曲名・スコアなどの読み取り結果を保存します。</li>
         <li>
           スコアや曲名の自動判定に失敗した場合、手動で入力された正しい曲名・スコアを共有します。
         </li>
         <li>
-          誰がアップロードしたか分からない形で保存されます（画像への映り込みを除く）。
+          誰がアップロードしたか分からない形で保存されます（写真への映り込みを除く）。
         </li>
       </ul>
       <p className="text-xs text-muted-foreground">
