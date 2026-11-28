@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { flattenHistory, groupHistoryByVersion, pickBpiSong, personalBest, personalBestEntry, personalBestDiff, previewScore, rankWithSelf, resolveSongRoute, songPaths, syncScore } from "@/lib/bpi/songData";
+import { flattenHistory, groupHistoryByVersion, pickBpiSong, personalBest, personalBestEntry, previewScore, rankWithSelf, resolveSongRoute, songPaths, syncScore } from "@/lib/bpi/songData";
 
 let token: string | null = null;
 vi.mock("@/lib/firebase/auth", () => ({ currentIdToken: async () => token }));
@@ -32,13 +32,6 @@ describe("自己ベストと自己歴代の点差", () => {
     });
     expect(personalBestEntry(tie)).toEqual({ exScore: 1800, version: "32" });
     expect(personalBestEntry([])).toBeNull();
-  });
-
-  it("自己ベストとの差は、下回ったとき（マイナス）や同点（0）も返す。初プレーだけ null", () => {
-    expect(personalBestDiff(1812, 1800)).toBe(12);
-    expect(personalBestDiff(1800, 1800)).toBe(0);
-    expect(personalBestDiff(1700, 1800)).toBe(-100);
-    expect(personalBestDiff(1700, null)).toBeNull();
   });
 
   it("バージョンごとにまとめ、新しいバージョンを先に。同じバージョン内では 1 つ前のスコアとの差を付ける", () => {

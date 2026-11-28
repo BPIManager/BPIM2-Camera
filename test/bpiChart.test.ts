@@ -23,8 +23,9 @@ const render = (props: Partial<Parameters<typeof BpiChart>[0]> = {}) =>
 describe("BpiChart", () => {
   it("BPI 100〜0 の 11 本と YOU の 1 本、合わせて 12 本の棒を描き、スコアの高い順に並べる", () => {
     const html = render();
-    // 棒 12 本 + YOU の吹き出しの枠 1 つ
+    // 棒 12 本 + YOU の吹き出しの枠 1 つ（ツールチップは、押す・なぞるまで出ない）
     expect(html.match(/<rect /g)).toHaveLength(13);
+    expect(html).not.toContain('role="tooltip"');
     expect(html).toContain(">YOU<");
     // YOU（2050）は BPI 50（2000）と BPI 60（2100）の間に入る
     expect(html.indexOf(">60<")).toBeLessThan(html.indexOf(">YOU<"));

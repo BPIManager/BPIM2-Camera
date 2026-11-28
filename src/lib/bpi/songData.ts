@@ -228,11 +228,6 @@ export function personalBest(history: readonly HistoryEntry[] | null): number | 
   return personalBestEntry(history)?.exScore ?? null;
 }
 
-/** 過去の自己ベストとの差（今回 − 過去の自己ベスト）。マイナスも返す。記録がない（初プレー）なら null */
-export function personalBestDiff(exScore: number, best: number | null): number | null {
-  return best === null ? null : exScore - best;
-}
-
 /** 履歴 1 件。同じバージョン内で 1 つ前（古い方）のスコアとの差を持つ */
 export interface HistoryRecord extends HistoryEntry {
   scoreDiff: number | null;

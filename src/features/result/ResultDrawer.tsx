@@ -11,7 +11,6 @@ import {
   Share2,
   X,
 } from "lucide-react";
-import Badge from "@/components/ui/badge";
 import DifficultyBadge from "@/components/ui/difficulty-badge";
 import Skeleton from "@/components/ui/skeleton";
 import Button from "@/components/ui/button";
@@ -22,14 +21,15 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import Input from "@/components/ui/input";
-import ResultDetails from "./ResultDetails";
+import { BadgeNote, DeltaBadge } from "./DeltaBadge";
+import ResultChips from "./ResultChips";
 import Label from "@/components/ui/label";
 import { REFERENCE_VERSION } from "@/lib/bpi/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBpim2Profile } from "@/hooks/useBpim2Profile";
 import { useBpimSync } from "@/hooks/useBpimSync";
 import { useRemote } from "@/hooks/useRemote";
-import { formatDelta, formatPt, headlinePt, useBeatSeekerPreview } from "./BeatSeekerPreview";
+import { formatPt, headlinePt, useBeatSeekerPreview } from "./BeatSeekerPreview";
 import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import {
   syncTargetLabel,
@@ -38,7 +38,6 @@ import {
 } from "@/lib/bpi/syncTarget";
 import {
   fetchHistory,
-  personalBestDiff,
   personalBestEntry,
   previewScore,
   type SelfInfo,
@@ -86,13 +85,11 @@ export default function ResultDrawer({
   );
   const bestEntry = personalBestEntry(history.data);
   const best = bestEntry?.exScore ?? null;
-  // 自己ベストを出したバージョン（数字のときだけ。例: 33）
+  // 自己ベストを出したバージョン（数字のときだけ。例: 33）。チャートに、点線の棒（BEST）で出す
   const bestVersion =
     bestEntry?.version && /^\d+$/.test(bestEntry.version)
-      ? `(${bestEntry.version})`
-      : "";
-  // 過去の自己ベストとの差。下回ったとき（マイナス）も常に出す。初プレー（記録なし）のときだけ出さない
-  const diff = ed.record ? personalBestDiff(ed.record.exScore, best) : null;
+      ? bestEntry.version
+      : null;
   const self: SelfInfo | null = user
     ? {
         userId: user.uid,
@@ -196,9 +193,6 @@ export default function ResultDrawer({
           : "—";
   const rankText =
     ed.record?.estimatedRank != null ? `${ed.record.estimatedRank}位` : "—";
-  const diffText =
-    diff === null ? "" : diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : "±0";
-
   return (
     <Drawer open dismissible={false}>
       {/* 曲が決まったら、背の高いシートにして、タブの中身だけをスクロールさせる（シート自体は動かない） */}
@@ -264,19 +258,14 @@ export default function ResultDrawer({
                       difficulty={ed.chart.difficulty}
                       level={ed.chart.level}
                     />
-                    {diff !== null && (
-                      <Badge
-                        variant={
-                          diff > 0
-                            ? "success"
-                            : diff < 0
-                              ? "destructive"
-                              : "default"
-                        }
-                      >
-                        自己歴代{bestVersion} {diffText}
-                      </Badge>
-                    )}
+                    <ResultChips
+                      clearType={ed.clearType}
+                      onClearType={ed.setClearType}
+                      useOption={ed.useOption}
+                      onUseOption={ed.setUseOption}
+                      counts={ed.counts}
+                      onCount={ed.setCount}
+                    />
                   </>
                 ) : (
                   "読み取れなかった項目は手で入力できます"
@@ -311,7 +300,7 @@ export default function ResultDrawer({
                       onChange={(e) =>
                         ed.setExText(e.target.value.replace(/\D/g, ""))
                       }
-                      className="h-10 text-center text-2xl font-semibold tabular-nums"
+                      className="h-7 px-1 text-center text-2xl leading-none font-semibold tabular-nums"
                     />
                   ) : (
                     <>
@@ -334,14 +323,12 @@ export default function ResultDrawer({
                   muted={!ed.bpiLoading && !bpiIsNumber}
                   sub={
                     previewKey === null ? undefined : bpimPreview.loading || ed.bpiLoading ? (
-                      <Skeleton className="h-3 w-16" />
-                    ) : totalDelta === null ? null : (
-                      <span
-                        className={cn(totalDelta > 0 ? "text-success" : "text-muted-foreground")}
+                      <BadgeNote tone="loading" />
+                    ) : totalDelta === null ? undefined : (
+                      <DeltaBadge
+                        delta={totalDelta}
                         title={`総合BPI ${totalChange?.before ?? "—"} → ${totalChange?.after ?? "—"}`}
-                      >
-                        総合 {totalDelta > 0 ? `+${totalDelta.toFixed(2)}` : totalDelta < 0 ? `−${(-totalDelta).toFixed(2)}` : "±0"}
-                      </span>
+                      />
                     )
                   }
                 >
@@ -353,13 +340,11 @@ export default function ResultDrawer({
                     muted={headline === null}
                     sub={
                       beatSeeker.kind === "loading" ? (
-                        <Skeleton className="h-3 w-16" />
+                        <BadgeNote tone="loading" />
                       ) : headline === null ? (
-                        <span className="text-warning">取得できず（詳細）</span>
-                      ) : headline.totalDelta === null ? null : (
-                        <span className={cn(headline.totalDelta > 0 ? "text-success" : "text-muted-foreground")}>
-                          総合 {formatDelta(headline.totalDelta)}
-                        </span>
+                        <BadgeNote tone="warning">取得できず</BadgeNote>
+                      ) : headline.totalDelta === null ? undefined : (
+                        <DeltaBadge delta={headline.totalDelta} />
                       )
                     }
                   >
@@ -395,14 +380,6 @@ export default function ResultDrawer({
                   0〜{ed.chart.notes * 2} の範囲で入力してください
                 </p>
               )}
-              <ResultDetails
-                clearType={ed.clearType}
-                onClearType={ed.setClearType}
-                useOption={ed.useOption}
-                onUseOption={ed.setUseOption}
-                counts={ed.counts}
-                onCount={ed.setCount}
-              />
             </div>
           </div>
 
@@ -413,6 +390,7 @@ export default function ResultDrawer({
               self={self}
               history={history}
               best={best}
+              bestVersion={bestVersion}
               arenaRank={profile?.arenaRank ?? null}
               beatSeeker={beatSeeker}
               defaultTab={settings.resultTab}
@@ -502,7 +480,10 @@ export default function ResultDrawer({
   );
 }
 
-/** ラベルと値を縦に並べた 1 項目。値は同じ高さ・同じ大きさで中央に置く（muted は値がないときの淡い表示） */
+/**
+ * ラベルと値を縦に並べた 1 項目。値は同じ高さ・同じ大きさで中央に置く（muted は値がないときの淡い表示）。
+ * sub は、値の下の空き（値の枠の下 14px）に出す小さなバッジ（総合の差など）。行の高さは変えず、見出しも値の真上のまま
+ */
 function Stat({
   label,
   htmlFor,
@@ -513,27 +494,26 @@ function Stat({
   label: string;
   htmlFor?: string;
   muted?: boolean;
-  /** 値の下に小さく出す補足（出さないときは undefined。出す予定で、まだなければ null にして、高さだけ取る） */
   sub?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col items-center gap-1 text-center">
-      <Label
-        htmlFor={htmlFor}
-        className="text-xs font-normal text-muted-foreground"
-      >
+      <Label htmlFor={htmlFor} className="text-xs font-normal text-muted-foreground">
         {label}
       </Label>
-      <div
-        className={cn(
-          "relative flex h-10 w-full items-center justify-center text-2xl leading-none font-semibold tabular-nums",
-          muted && "text-muted-foreground",
-        )}
-      >
-        {children}
+      <div className="relative h-10 w-full">
+        {/* 値は、上の 28px の真ん中（下の 14px は sub の場所）。EX スコアの入力欄も、同じ高さ（h-7）にして、数字の位置を揃える */}
+        <div
+          className={cn(
+            "relative flex h-7 items-center justify-center text-2xl leading-none font-semibold tabular-nums",
+            muted && "text-muted-foreground",
+          )}
+        >
+          {children}
+        </div>
+        {sub && <div className="absolute inset-x-0 bottom-0 flex justify-center">{sub}</div>}
       </div>
-      {sub !== undefined && <div className="flex h-4 items-center text-xs leading-none font-normal">{sub}</div>}
     </div>
   );
 }

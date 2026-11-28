@@ -30,6 +30,8 @@ interface Props {
   self: SelfInfo | null;
   history: { data: HistoryEntry[] | null; loading: boolean };
   best: number | null;
+  /** 自己歴代を出したバージョン（数字のときだけ。例: 33）。分からなければ null */
+  bestVersion: string | null;
   /** 自分のアリーナランク。チャートの参照線の既定に使う */
   arenaRank: string | null;
   /** beat-seeker に登録した場合の変動（保存しない） */
@@ -42,7 +44,7 @@ interface Props {
  * 曲が確定したときの、BPI（チャート・履歴・ランキング）と beat-seeker の 2 タブ。
  * 残りの高さいっぱいに広がり、タブの中身だけがスクロールする（シート全体はスクロールしない）
  */
-export default function SongTabs({ record, outcome, self, history, best, arenaRank, beatSeeker, defaultTab }: Props) {
+export default function SongTabs({ record, outcome, self, history, best, bestVersion, arenaRank, beatSeeker, defaultTab }: Props) {
   const [main, setMain] = useState<ResultTab>(() => initialResultTab(defaultTab, beatSeeker.kind !== "off"));
   const [tab, setTab] = useState<Tab>("chart");
   const panelId = main === "bpi" ? `panel-${tab}` : "panel-beat-seeker";
@@ -97,7 +99,7 @@ export default function SongTabs({ record, outcome, self, history, best, arenaRa
         className={cn("relative min-h-0 flex-1 px-3 pt-2", scrolls && "overflow-y-auto overscroll-contain")}
       >
         {main === "beat-seeker" && <BeatSeekerTab state={beatSeeker} />}
-        {main === "bpi" && tab === "chart" && <ChartTab record={record} outcome={outcome} best={best} self={self} arenaRank={arenaRank} />}
+        {main === "bpi" && tab === "chart" && <ChartTab record={record} outcome={outcome} best={best} bestVersion={bestVersion} self={self} arenaRank={arenaRank} />}
         {main === "bpi" && tab === "history" && <HistoryPanel signedIn={self !== null} history={history} />}
         {main === "bpi" && tab === "ranking" && <RankingPanel self={self} chart={record.chart} exScore={record.exScore} bpi={record.bpi} />}
       </div>
@@ -113,13 +115,13 @@ const readSavedRef = () => {
   }
 };
 
-function ChartTab({ record, outcome, best, self, arenaRank }: { record: ResultRecord; outcome: BpiOutcome | null; best: number | null; self: SelfInfo | null; arenaRank: string | null }) {
+function ChartTab({ record, outcome, best, bestVersion, self, arenaRank }: { record: ResultRecord; outcome: BpiOutcome | null; best: number | null; bestVersion: string | null; self: SelfInfo | null; arenaRank: string | null }) {
   const [saved, setSaved] = useState(readSavedRef);
   const choice = defaultRefChoice(saved, arenaRank, outcome?.arenaAverages);
   const needsRivals = choice === "rival-avg" || choice === "rival-top";
   const rivals = useRemote(self && needsRivals ? `rival:${self.userId}:${record.chart.songId}` : null, () => fetchRivalRanking(self!.userId, record.chart, REFERENCE_VERSION));
   const rivalScores = rivals.data ? rivals.data.rows.filter((r) => r.userId !== self?.userId && r.exScore !== null).map((r) => r.exScore as number) : null;
-  const refLine = refLineFor(choice, { arenaAverages: outcome?.arenaAverages, best, rivalScores });
+  const refLine = refLineFor(choice, { arenaAverages: outcome?.arenaAverages, rivalScores });
 
   const message = (text: string) => <p className="py-6 text-center text-sm text-muted-foreground">{text}</p>;
   if (record.bpiStatus === "unsupported-level") return message("BPI のチャートは、☆11・☆12 の曲で表示されます");
@@ -131,7 +133,6 @@ function ChartTab({ record, outcome, best, self, arenaRank }: { record: ResultRe
     ...ARENA_RANKS.map((r) => ({ value: r, label: `${r}平均`, disabled: !outcome.arenaAverages?.[r] })),
     { value: "rival-avg", label: "ライバル平均", disabled: self === null },
     { value: "rival-top", label: "ライバルトップ", disabled: self === null },
-    { value: "personal-best", label: "自己歴代", disabled: best === null },
   ];
   const status = choice !== "none" && refLine === null ? (needsRivals && rivals.loading ? "読み込み中" : "データなし") : null;
 
@@ -164,7 +165,7 @@ function ChartTab({ record, outcome, best, self, arenaRank }: { record: ResultRe
         </label>
       </div>
       <div className="min-h-0 flex-1">
-        <BpiChart curve={outcome.curve} exScore={record.exScore} maxScore={record.chart.notes * 2} refLine={refLine} />
+        <BpiChart curve={outcome.curve} exScore={record.exScore} maxScore={record.chart.notes * 2} refLine={refLine} best={best} bestVersion={bestVersion} />
       </div>
     </div>
   );
