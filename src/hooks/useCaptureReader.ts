@@ -10,6 +10,7 @@ import { collectReadSample } from "@/lib/training/collect";
 import { flushIfEnabled } from "@/lib/training/upload";
 import type { OcrEngine } from "@/lib/recognition/paddle/engine";
 import { cropPixels, readUseOption } from "@/lib/recognition/useOption";
+import { readClearType } from "@/lib/recognition/clearType";
 import type { Rect } from "@/lib/vision/framing";
 import type { GuideKey } from "@/lib/vision/guides";
 import { panelRegions, type PanelRegion } from "@/lib/vision/panelRegions";
@@ -64,6 +65,7 @@ export function useCaptureReader({
     let ocr: OcrTrace | undefined;
     let extraCrops: Partial<Record<PanelRegion, Blob>> | undefined;
     let optionPixels: ImageData | null = null;
+    let clearTypePixels: ImageData[] = [];
     try {
       const full = await createImageBitmap(image);
       // パネルの中のほかの欄（使用オプション・ミスカウント）。枠の位置から求め、画像を閉じる前に切り出しておく。
@@ -76,6 +78,8 @@ export function useCaptureReader({
           if (r) extraCrops[k] = await cropBlob(full, r);
         }
         if (at.useOption) optionPixels = cropPixels(full, at.useOption, 700);
+        // CLEAR TYPE の行。読めなければ、少し広げた範囲で読み直す
+        clearTypePixels = [at.clearType, at.clearTypeWide].flatMap((r) => (r ? [cropPixels(full, r, 700)] : []));
       }
       const crops = regions
         ? ({
@@ -151,6 +155,15 @@ export function useCaptureReader({
         .then((useOption) => {
           logEvent("read", `使用オプション: ${useOption ?? "読めず"}`);
           if (useOption) setDraft((d) => (d && d.id === next.id && d.raw ? { ...d, raw: { ...d.raw, useOption } } : d));
+        })
+        .catch(() => undefined);
+    }
+    // クリアランプも、結果を出したあとで読む。読めたら結果に足す（読めなければ空のまま。結果画面で選ぶ）
+    if (clearTypePixels.length > 0 && engine && raw) {
+      void readClearType(clearTypePixels, engine)
+        .then((clearType) => {
+          logEvent("read", `クリアランプ: ${clearType ?? "読めず"}`);
+          if (clearType) setDraft((d) => (d && d.id === next.id && d.raw ? { ...d, raw: { ...d.raw, clearType } } : d));
         })
         .catch(() => undefined);
     }
