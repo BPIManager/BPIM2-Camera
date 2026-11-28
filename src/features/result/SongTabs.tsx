@@ -5,11 +5,15 @@ import { REFERENCE_VERSION, type BpiOutcome } from "@/lib/bpi/client";
 import { ARENA_RANKS, REF_STORAGE_KEY, defaultRefChoice, isRefChoice, refLineFor } from "@/lib/bpi/refLine";
 import { fetchRivalRanking, type HistoryEntry, type SelfInfo } from "@/lib/bpi/songData";
 import type { ResultRecord } from "@/lib/domain/types";
+import { RESULT_TABS, initialResultTab, type ResultTab } from "@/lib/result/resultTab";
 import { cn } from "@/lib/utils";
+import BeatSeekerTab from "./BeatSeekerTab";
+import type { BeatSeekerPreviewState } from "./BeatSeekerPreview";
 import BpiChart from "./BpiChart";
 import HistoryPanel from "./HistoryPanel";
 import RankingPanel from "./RankingPanel";
 
+/** BPI の下のタブ */
 type Tab = "chart" | "history" | "ranking";
 
 const TABS: { id: Tab; label: string }[] = [
@@ -26,46 +30,78 @@ interface Props {
   self: SelfInfo | null;
   history: { data: HistoryEntry[] | null; loading: boolean };
   best: number | null;
+  /** 自己歴代を出したバージョン（数字のときだけ。例: 33）。分からなければ null */
+  bestVersion: string | null;
   /** 自分のアリーナランク。チャートの参照線の既定に使う */
   arenaRank: string | null;
+  /** beat-seeker に登録した場合の変動（保存しない） */
+  beatSeeker: BeatSeekerPreviewState;
+  /** 最初に開く上のタブ（設定）。beat-seeker を選んでいても、連携していなければ BPI を開く */
+  defaultTab: ResultTab;
 }
 
 /**
- * 曲が確定したときの、チャート・履歴・ランキングの 3 タブ。
+ * 曲が確定したときの、BPI（チャート・履歴・ランキング）と beat-seeker の 2 タブ。
  * 残りの高さいっぱいに広がり、タブの中身だけがスクロールする（シート全体はスクロールしない）
  */
-export default function SongTabs({ record, outcome, self, history, best, arenaRank }: Props) {
+export default function SongTabs({ record, outcome, self, history, best, bestVersion, arenaRank, beatSeeker, defaultTab }: Props) {
+  const [main, setMain] = useState<ResultTab>(() => initialResultTab(defaultTab, beatSeeker.kind !== "off"));
   const [tab, setTab] = useState<Tab>("chart");
+  const panelId = main === "bpi" ? `panel-${tab}` : "panel-beat-seeker";
+  const scrolls = main === "beat-seeker" || tab === "chart";
   return (
     <section className="flex min-h-0 flex-1 flex-col">
-      <div role="tablist" aria-label="曲の詳細" className="grid shrink-0 grid-cols-3 border-b border-border px-4">
-        {TABS.map((t) => (
+      <div role="tablist" aria-label="曲の詳細" className="grid shrink-0 grid-cols-2 border-b border-border px-4">
+        {RESULT_TABS.map((m) => (
           <button
-            key={t.id}
+            key={m.id}
             type="button"
             role="tab"
-            id={`tab-${t.id}`}
-            aria-selected={tab === t.id}
-            aria-controls={`panel-${t.id}`}
-            onClick={() => setTab(t.id)}
+            id={`main-${m.id}`}
+            aria-selected={main === m.id}
+            aria-controls={m.id === "bpi" ? undefined : "panel-beat-seeker"}
+            onClick={() => setMain(m.id)}
             className={cn(
               "-mb-px border-b-2 py-2 text-sm transition-colors",
-              tab === t.id ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground",
+              main === m.id ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground",
             )}
           >
-            {t.label}
+            {m.label}
           </button>
         ))}
       </div>
+      {/* BPI の下のタブ。小さな切り替えにして、上のタブと見分けがつくようにする */}
+      {main === "bpi" && (
+        <div role="tablist" aria-label="BPI の詳細" className="mx-4 mt-2 grid shrink-0 grid-cols-3 gap-0.5 rounded-md bg-muted p-0.5">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`tab-${t.id}`}
+              aria-selected={tab === t.id}
+              aria-controls={`panel-${t.id}`}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "rounded py-1 text-xs transition-colors",
+                tab === t.id ? "bg-card font-medium text-foreground shadow-sm" : "text-muted-foreground",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         role="tabpanel"
-        id={`panel-${tab}`}
-        aria-labelledby={`tab-${tab}`}
-        className={cn("relative min-h-0 flex-1 px-3 pt-2", tab === "chart" && "overflow-y-auto overscroll-contain")}
+        id={panelId}
+        aria-labelledby={main === "bpi" ? `tab-${tab}` : "main-beat-seeker"}
+        className={cn("relative min-h-0 flex-1 px-3 pt-2", scrolls && "overflow-y-auto overscroll-contain")}
       >
-        {tab === "chart" && <ChartTab record={record} outcome={outcome} best={best} self={self} arenaRank={arenaRank} />}
-        {tab === "history" && <HistoryPanel signedIn={self !== null} history={history} />}
-        {tab === "ranking" && <RankingPanel self={self} chart={record.chart} exScore={record.exScore} bpi={record.bpi} />}
+        {main === "beat-seeker" && <BeatSeekerTab state={beatSeeker} />}
+        {main === "bpi" && tab === "chart" && <ChartTab record={record} outcome={outcome} best={best} bestVersion={bestVersion} self={self} arenaRank={arenaRank} />}
+        {main === "bpi" && tab === "history" && <HistoryPanel signedIn={self !== null} history={history} />}
+        {main === "bpi" && tab === "ranking" && <RankingPanel self={self} chart={record.chart} exScore={record.exScore} bpi={record.bpi} />}
       </div>
     </section>
   );
@@ -79,13 +115,13 @@ const readSavedRef = () => {
   }
 };
 
-function ChartTab({ record, outcome, best, self, arenaRank }: { record: ResultRecord; outcome: BpiOutcome | null; best: number | null; self: SelfInfo | null; arenaRank: string | null }) {
+function ChartTab({ record, outcome, best, bestVersion, self, arenaRank }: { record: ResultRecord; outcome: BpiOutcome | null; best: number | null; bestVersion: string | null; self: SelfInfo | null; arenaRank: string | null }) {
   const [saved, setSaved] = useState(readSavedRef);
   const choice = defaultRefChoice(saved, arenaRank, outcome?.arenaAverages);
   const needsRivals = choice === "rival-avg" || choice === "rival-top";
   const rivals = useRemote(self && needsRivals ? `rival:${self.userId}:${record.chart.songId}` : null, () => fetchRivalRanking(self!.userId, record.chart, REFERENCE_VERSION));
   const rivalScores = rivals.data ? rivals.data.rows.filter((r) => r.userId !== self?.userId && r.exScore !== null).map((r) => r.exScore as number) : null;
-  const refLine = refLineFor(choice, { arenaAverages: outcome?.arenaAverages, best, rivalScores });
+  const refLine = refLineFor(choice, { arenaAverages: outcome?.arenaAverages, rivalScores });
 
   const message = (text: string) => <p className="py-6 text-center text-sm text-muted-foreground">{text}</p>;
   if (record.bpiStatus === "unsupported-level") return message("BPI のチャートは、☆11・☆12 の曲で表示されます");
@@ -97,7 +133,6 @@ function ChartTab({ record, outcome, best, self, arenaRank }: { record: ResultRe
     ...ARENA_RANKS.map((r) => ({ value: r, label: `${r}平均`, disabled: !outcome.arenaAverages?.[r] })),
     { value: "rival-avg", label: "ライバル平均", disabled: self === null },
     { value: "rival-top", label: "ライバルトップ", disabled: self === null },
-    { value: "personal-best", label: "自己歴代", disabled: best === null },
   ];
   const status = choice !== "none" && refLine === null ? (needsRivals && rivals.loading ? "読み込み中" : "データなし") : null;
 
@@ -130,7 +165,7 @@ function ChartTab({ record, outcome, best, self, arenaRank }: { record: ResultRe
         </label>
       </div>
       <div className="min-h-0 flex-1">
-        <BpiChart curve={outcome.curve} exScore={record.exScore} maxScore={record.chart.notes * 2} refLine={refLine} />
+        <BpiChart curve={outcome.curve} exScore={record.exScore} maxScore={record.chart.notes * 2} refLine={refLine} best={best} bestVersion={bestVersion} />
       </div>
     </div>
   );

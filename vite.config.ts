@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vitest/config";
-import type { Plugin } from "vite";
+import type { Plugin, ProxyOptions } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
@@ -31,6 +31,24 @@ const ISOLATION_HEADERS = { "Cross-Origin-Opener-Policy": "same-origin", "Cross-
 const PROXY = {
   "/__/auth": { target: "https://bpimv2.firebaseapp.com", changeOrigin: true },
   "/bpim2-api": { target: "https://bpi2.poyashi.me", changeOrigin: true, xfwd: true, rewrite: (p: string) => p.replace(/^\/bpim2-api/, "") },
+};
+
+/**
+ * 開発サーバーだけの中継。本番には置かない
+ * - /beat-seeker-api: beat-seeker の外部連携 API。開発サーバーのオリジン（localhost・tailscale）は CORS の許可リストにないため。
+ *   本番のビルドは、ブラウザから beat-seeker を直接呼ぶ（トークンを自分のサーバーに通さない。src/lib/beatSeeker/client.ts）
+ */
+const DEV_PROXY: Record<string, ProxyOptions> = {
+  "/beat-seeker-api": {
+    target: "https://beat-seeker.onrender.com",
+    changeOrigin: true,
+    rewrite: (p: string) => p.replace(/^\/beat-seeker-api/, ""),
+    // ブラウザは POST に Origin（開発サーバーのオリジン）を付ける。beat-seeker は許可リストにない Origin を 403（Invalid CORS request）にするので、
+    // 中継では外して送る（GET の /me は Origin が付かないので通っていた）。認証はトークンで行う
+    configure: (proxy) => {
+      proxy.on("proxyReq", (proxyReq) => proxyReq.removeHeader("origin"));
+    },
+  },
 };
 
 /** 開発・プレビューで隔離ヘッダーを付ける。サインイン用ページ（signin.html と、Firebase の中継 /__/auth/）は除く（Firebase のリダイレクトが阻まれるため） */
@@ -142,7 +160,7 @@ export default defineConfig(({ command }) => ({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,png,json}"],
+        globPatterns: ["**/*.{js,css,html,png,svg,json}"],
         // サインインページと Firebase の中継（/__/auth/handler など）はアプリ本体に置き換えず、そのまま取得する
         // （/__/ を除外しないと、プロバイダからの戻りの遷移に index.html が返り、サインインが完了しない）
         navigateFallbackDenylist: [/^\/signin\.html/, /^\/__\//],
@@ -154,7 +172,7 @@ export default defineConfig(({ command }) => ({
   ],
   // tailscale serve 経由（*.ts.net）でスマホから開けるようにする
   // 分離されたページ（cross-origin isolated）にすると、OCR の WASM がマルチスレッドで動き、約 3 倍速くなる
-  server: { host: true, allowedHosts: [".ts.net"], proxy: PROXY },
+  server: { host: true, allowedHosts: [".ts.net"], proxy: { ...PROXY, ...DEV_PROXY } },
   preview: { proxy: PROXY },
   build: { rollupOptions: { input: { main: path.resolve(import.meta.dirname, "index.html"), signin: path.resolve(import.meta.dirname, "signin.html") } } },
   // onnxruntime-web の版は ortFlavor で出し分ける

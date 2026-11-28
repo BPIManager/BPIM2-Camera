@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { flattenHistory, groupHistoryByVersion, pickBpiSong, personalBest, personalBestEntry, personalBestDiff, rankWithSelf, resolveSongRoute, songPaths, syncScore } from "@/lib/bpi/songData";
+import { flattenHistory, groupHistoryByVersion, pickBpiSong, personalBest, personalBestEntry, previewScore, rankWithSelf, resolveSongRoute, songPaths, syncScore } from "@/lib/bpi/songData";
 
 let token: string | null = null;
 vi.mock("@/lib/firebase/auth", () => ({ currentIdToken: async () => token }));
@@ -32,13 +32,6 @@ describe("自己ベストと自己歴代の点差", () => {
     });
     expect(personalBestEntry(tie)).toEqual({ exScore: 1800, version: "32" });
     expect(personalBestEntry([])).toBeNull();
-  });
-
-  it("自己ベストとの差は、下回ったとき（マイナス）や同点（0）も返す。初プレーだけ null", () => {
-    expect(personalBestDiff(1812, 1800)).toBe(12);
-    expect(personalBestDiff(1800, 1800)).toBe(0);
-    expect(personalBestDiff(1700, 1800)).toBe(-100);
-    expect(personalBestDiff(1700, null)).toBeNull();
   });
 
   it("バージョンごとにまとめ、新しいバージョンを先に。同じバージョン内では 1 つ前のスコアとの差を付ける", () => {
@@ -174,6 +167,36 @@ describe("BPIM2 へのスコア保存", () => {
     token = null;
     const fetchImpl = vi.fn();
     expect((await syncScore("u1", chart, 100, "34", undefined, fetchImpl)).kind).toBe("error");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("BPIM2 の総合BPIのプレビュー（保存しない）", () => {
+  const chart = { songId: 5365, title: "Sky High", playStyle: "SP", difficulty: "ANOTHER", level: 12, notes: 1943 } as const;
+  const respond = (status: number, body: unknown) => vi.fn().mockResolvedValue({ ok: status < 300, status, json: async () => body });
+
+  it("preview: true を付けて同じ API に送り、自己ベストを上回るかと、総合BPIの変動を返す", async () => {
+    token = "tok";
+    const fetchImpl = respond(200, { error: false, body: { preview: true, improved: true, totalBpi: { before: 7.5, after: 9, delta: 1.5 } } });
+    expect(await previewScore("u1", chart, 3100, "34", { useOption: "RANDOM", missCount: 7 }, fetchImpl)).toEqual({ improved: true, totalBpi: { before: 7.5, after: 9, delta: 1.5 } });
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe("/bpim2-api/api/v2/users/u1/scores/manual");
+    expect(JSON.parse(init.body)).toEqual({ songId: 5365, songDomain: "allSongs", version: "34", exScore: 3100, useOption: "RANDOM", missCount: 7, preview: true });
+  });
+
+  it("総合BPIの対象外（☆10 以下など）は totalBpi が null", async () => {
+    token = "tok";
+    expect(await previewScore("u1", chart, 100, "34", undefined, respond(200, { error: false, body: { improved: true, totalBpi: null } }))).toEqual({ improved: true, totalBpi: null });
+  });
+
+  it("失敗・通信エラー・未サインイン・形が違うときは null（画面は何も出さない）", async () => {
+    token = "tok";
+    expect(await previewScore("u1", chart, 100, "34", undefined, respond(404, { error: true }))).toBeNull();
+    expect(await previewScore("u1", chart, 100, "34", undefined, respond(200, { error: false, body: { foo: 1 } }))).toBeNull();
+    expect(await previewScore("u1", chart, 100, "34", undefined, vi.fn().mockRejectedValue(new Error("offline")))).toBeNull();
+    token = null;
+    const fetchImpl = vi.fn();
+    expect(await previewScore("u1", chart, 100, "34", undefined, fetchImpl)).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

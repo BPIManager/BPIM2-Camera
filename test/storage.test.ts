@@ -104,3 +104,21 @@ describe("needsPlaySidePrompt", () => {
     expect(loadSettings(mem({ onboarded: true, playSide: "2P" }))).toMatchObject({ playSide: "2P", playSideChosen: true });
   });
 });
+
+describe("結果画面の最初のタブ", () => {
+  const mem = (stored: Record<string, unknown>) => ({ getItem: () => JSON.stringify(stored), setItem: () => undefined });
+
+  it("既定は BPI。壊れた値は BPI に戻し、beat-seeker は保存したとおりに読む", () => {
+    expect(defaultSettings().resultTab).toBe("bpi");
+    expect(loadSettings(mem({ autoCapture: false })).resultTab).toBe("bpi");
+    expect(loadSettings(mem({ resultTab: "beat-seeker" })).resultTab).toBe("beat-seeker");
+    expect(loadSettings(mem({ resultTab: "ranking" })).resultTab).toBe("bpi");
+  });
+
+  it("beat-seeker を選んでいても、連携していなければ BPI を開く（案内しか出ないため）", async () => {
+    const { initialResultTab } = await import("@/lib/result/resultTab");
+    expect(initialResultTab("beat-seeker", true)).toBe("beat-seeker");
+    expect(initialResultTab("beat-seeker", false)).toBe("bpi");
+    expect(initialResultTab("bpi", true)).toBe("bpi");
+  });
+});

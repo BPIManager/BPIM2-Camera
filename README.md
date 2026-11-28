@@ -212,6 +212,7 @@ While the dev server is running, the phone sends debug logs to the PC. They are 
 - `read`: each stage of a read, with the time since the shot
 - `ocr:title` / `ocr:pass`: each request to the OCR workers, its reply time, timeouts and restarts
 - `camera`: opening and stopping the camera, play failures, track `ended`/`mute`, and the stall watchdog
+- `net`: every `fetch` the phone makes (`→ POST /bpim2-api/…`, `← 200 123ms`, or `✗` with the reason). For BPIM2 `scores/manual` and every beat-seeker call, the sent and returned JSON is logged too (up to 1,500 characters). Auth headers and analytics are never logged
 - `app` / `error`: going to the background and back, uncaught errors and unhandled rejections
 
 Captured images go to `internal/captures`. Production builds send nothing.

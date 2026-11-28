@@ -10,11 +10,21 @@ const TONES: Record<Difficulty, string> = {
   LEGGENDARIA: "bg-diff-leggendaria/20 text-diff-leggendaria border-diff-leggendaria/30",
 };
 
-/** 「SP ANOTHER ☆12」のような譜面の表示。難易度で色を変える */
+/** 難易度の頭文字。SPB（BEGINNER）・SPN（NORMAL）・SPH（HYPER）・SPA（ANOTHER）・SPL（LEGGENDARIA） */
+const INITIALS: Record<Difficulty, string> = { BEGINNER: "B", NORMAL: "N", HYPER: "H", ANOTHER: "A", LEGGENDARIA: "L" };
+
+/** 譜面の短い表記（SPL・DPA など） */
+export const chartCode = (playStyle: string, difficulty: Difficulty): string => `${playStyle}${INITIALS[difficulty]}`;
+
+/** 「SPL ☆12」のような譜面の表示。難易度で色を変える。正式名（SP LEGGENDARIA）は、読み上げと長押しで出す */
 export default function DifficultyBadge({ playStyle, difficulty, level, className }: { playStyle: string; difficulty: Difficulty; level: number; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center rounded-sm border px-1.5 py-0.5 text-xs font-bold", TONES[difficulty], className)}>
-      {playStyle} {difficulty} ☆{level}
+    <span
+      title={`${playStyle} ${difficulty} ☆${level}`}
+      aria-label={`${playStyle} ${difficulty} ☆${level}`}
+      className={cn("inline-flex items-center rounded-sm border px-1.5 py-0.5 text-xs font-bold", TONES[difficulty], className)}
+    >
+      {chartCode(playStyle, difficulty)} ☆{level}
     </span>
   );
 }

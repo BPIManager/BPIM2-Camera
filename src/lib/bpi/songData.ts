@@ -65,6 +65,53 @@ export async function syncScore(
   }
 }
 
+/** 総合BPIの変動（BPIM2 のプレビュー）。before は記録した最高値、after は保存した場合 */
+export interface TotalBpiChange {
+  before: number | null;
+  after: number | null;
+  delta: number | null;
+}
+
+/** BPIM2 に保存した場合の見込み（保存しない）。totalBpi は ☆12 などの対象外では null */
+export interface BpimPreview {
+  /** 自己ベスト（EX・ランプ・ミスカウント）を上回るか。上回らなければ保存されず、総合BPIも変わらない */
+  improved: boolean;
+  totalBpi: TotalBpiChange | null;
+}
+
+const numOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/**
+ * 保存した場合の総合BPIの変動を取る（POST /users/{uid}/scores/manual に preview: true。保存しない）。
+ * 曲・スコアを直すたびに呼ぶので、失敗は null にして画面は何も出さない
+ */
+export async function previewScore(
+  userId: string,
+  chart: ChartRef,
+  exScore: number,
+  version: string = LATEST_VERSION,
+  extras: SyncExtras = { useOption: null, missCount: null },
+  fetchImpl: typeof fetch = fetch,
+): Promise<BpimPreview | null> {
+  try {
+    const token = await currentIdToken();
+    if (!token) return null;
+    const res = await fetchImpl(`${BPIM2_API_PROXY}/api/v2/users/${userId}/scores/manual`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ songId: chart.songId, songDomain: "allSongs", version, exScore, useOption: extras.useOption, missCount: extras.missCount, preview: true }),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as Envelope<{ improved?: unknown; totalBpi?: { before?: unknown; after?: unknown; delta?: unknown } | null }>;
+    const body = json.error ? null : json.body;
+    if (!body || typeof body.improved !== "boolean") return null;
+    const t = body.totalBpi;
+    return { improved: body.improved, totalBpi: t ? { before: numOrNull(t.before), after: numOrNull(t.after), delta: numOrNull(t.delta) } : null };
+  } catch {
+    return null;
+  }
+}
+
 /** 自分のスコア履歴の 1 件 */
 export interface HistoryEntry {
   exScore: number;
@@ -179,11 +226,6 @@ export function personalBestEntry(history: readonly HistoryEntry[] | null): { ex
 /** 過去の自己ベスト（全バージョン）。記録がなければ null */
 export function personalBest(history: readonly HistoryEntry[] | null): number | null {
   return personalBestEntry(history)?.exScore ?? null;
-}
-
-/** 過去の自己ベストとの差（今回 − 過去の自己ベスト）。マイナスも返す。記録がない（初プレー）なら null */
-export function personalBestDiff(exScore: number, best: number | null): number | null {
-  return best === null ? null : exScore - best;
 }
 
 /** 履歴 1 件。同じバージョン内で 1 つ前（古い方）のスコアとの差を持つ */

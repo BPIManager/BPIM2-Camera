@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Info, TriangleAlert } from "lucide-react";
 import BrandMark from "@/components/brand-mark";
 import CameraPicker from "@/components/camera-picker";
+import ResultTabPicker from "@/components/result-tab-picker";
 import SyncTargetPicker from "@/components/sync-target-picker";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Avatar from "@/components/ui/avatar";
@@ -20,6 +21,8 @@ import { resolvePlaySide, type Settings } from "@/lib/storage/settings";
 import type { Size } from "@/lib/vision/framing";
 import { GUIDE_LAYOUTS, inferSide, resolveLayout, type GuideLayout } from "@/lib/vision/guides";
 import PlaySidePicker from "@/components/play-side-picker";
+import BeatSeekerLinkPanel from "@/features/beatSeeker/BeatSeekerLinkPanel";
+import { useBeatSeekerLink } from "@/hooks/useBeatSeekerLink";
 
 function Frame({
   title,
@@ -176,7 +179,35 @@ export function SignInStep({ onNext }: { onNext: () => void }) {
   );
 }
 
-/** ③ 好きなリザルト画面の写真に合わせて、スコア・曲名・判定内訳の位置を決める */
+/** ③ beat-seeker との連携（スキップ可）。連携トークンを貼り付けて確かめ、端末に保存する */
+export function BeatSeekerStep({ onNext }: { onNext: () => void }) {
+  const link = useBeatSeekerLink();
+  return (
+    <Frame
+      title="beat-seeker と連携"
+      lead="連携すると、読み取ったスコアで BEAT-PT・BEAT-TIER がどう変わるかを確かめ、beat-seeker に登録できます。あとから設定でも連携できます。"
+      actions={
+        link ? (
+          <Button size="lg" onClick={onNext}>
+            次へ
+          </Button>
+        ) : (
+          <button
+            type="button"
+            onClick={onNext}
+            className="self-center py-1 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            連携せずに進む
+          </button>
+        )
+      }
+    >
+      <BeatSeekerLinkPanel />
+    </Frame>
+  );
+}
+
+/** ④ 好きなリザルト画面の写真に合わせて、スコア・曲名・判定内訳の位置を決める */
 export function CalibrateStep({
   settings,
   update,
@@ -361,6 +392,7 @@ export function OptionsStep({
   const [auto, setAuto] = useState(settings.autoCapture);
   const [save, setSave] = useState(settings.saveToCameraRoll);
   const [syncTarget, setSyncTarget] = useState(settings.syncTarget);
+  const [resultTab, setResultTab] = useState(settings.resultTab);
   return (
     <Frame
       title="撮影と保存のしかた"
@@ -369,7 +401,7 @@ export function OptionsStep({
         <Button
           size="lg"
           onClick={() => {
-            update({ autoCapture: auto, saveToCameraRoll: save, syncTarget });
+            update({ autoCapture: auto, saveToCameraRoll: save, syncTarget, resultTab });
             onNext();
           }}
         >
@@ -399,6 +431,13 @@ export function OptionsStep({
             (結果画面で1件ごとに変えることもできます)
           </p>
           <SyncTargetPicker value={syncTarget} onChange={setSyncTarget} />
+        </div>
+        <div className="flex flex-col gap-2 py-3">
+          <Label>結果画面の最初のタブ</Label>
+          <p className="text-xs text-muted-foreground">
+            読み取り結果の下に最初に出すタブを選んでください。beat-seeker は、連携していないときは BPI を開きます。
+          </p>
+          <ResultTabPicker value={resultTab} onChange={setResultTab} />
         </div>
       </div>
     </Frame>
