@@ -108,6 +108,8 @@ export default function ResultDrawer({
     ed.chart,
     ed.record?.exScore ?? null,
     syncVersionOf(syncTarget),
+    // 使用オプションとミスカウントも送る。ミスカウントが分からなければ、BPIM2 は最新の記録の値を引き継ぐ
+    { useOption: ed.record?.useOption ?? null, missCount: ed.record?.missCount ?? null },
   );
 
   const commit = async () => {
