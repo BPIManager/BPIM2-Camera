@@ -29,18 +29,32 @@ export type SyncResult =
   | { kind: "not-improved" }
   | { kind: "error"; message: string };
 
+/** スコアと一緒に送る値。分からなければ null（BPIM2 は、ミスカウントが null なら最新の記録の値を引き継ぐ） */
+export interface SyncExtras {
+  useOption: string | null;
+  missCount: number | null;
+}
+
 /**
  * 読み取ったスコアを BPIM2 に保存する（POST /users/{uid}/scores/manual）。
  * 曲の ID は Camera の曲マスタ（allSongs）のものなので songDomain は "allSongs" で渡す。☆11・☆12 の songs 側へはサーバーが曲名と難易度で対応づける。
+ * 使用オプションとミスカウントも送る（古い BPIM2 は知らない項目を無視する）
  */
-export async function syncScore(userId: string, chart: ChartRef, exScore: number, version: string = LATEST_VERSION, fetchImpl: typeof fetch = fetch): Promise<SyncResult> {
+export async function syncScore(
+  userId: string,
+  chart: ChartRef,
+  exScore: number,
+  version: string = LATEST_VERSION,
+  extras: SyncExtras = { useOption: null, missCount: null },
+  fetchImpl: typeof fetch = fetch,
+): Promise<SyncResult> {
   try {
     const token = await currentIdToken();
     if (!token) return { kind: "error", message: "サインインしていません" };
     const res = await fetchImpl(`${BPIM2_API_PROXY}/api/v2/users/${userId}/scores/manual`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ songId: chart.songId, songDomain: "allSongs", version, exScore }),
+      body: JSON.stringify({ songId: chart.songId, songDomain: "allSongs", version, exScore, useOption: extras.useOption, missCount: extras.missCount }),
     });
     if (res.ok) return { kind: "saved" };
     const json = (await res.json().catch(() => null)) as { errorMessage?: string | null; message?: string } | null;

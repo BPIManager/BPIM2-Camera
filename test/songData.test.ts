@@ -146,27 +146,34 @@ describe("BPIM2 へのスコア保存", () => {
   it("曲の ID は allSongs のものとして、バージョン・EX スコアと一緒に POST する", async () => {
     token = "tok";
     const fetchImpl = respond(200, { error: false, body: {} });
-    expect(await syncScore("u1", chart, 3100, "34", fetchImpl)).toEqual({ kind: "saved" });
+    expect(await syncScore("u1", chart, 3100, "34", undefined, fetchImpl)).toEqual({ kind: "saved" });
     const [url, init] = fetchImpl.mock.calls[0];
     expect(url).toBe("/bpim2-api/api/v2/users/u1/scores/manual");
     expect(init.method).toBe("POST");
     expect(init.headers.Authorization).toBe("Bearer tok");
-    expect(JSON.parse(init.body)).toEqual({ songId: 5365, songDomain: "allSongs", version: "34", exScore: 3100 });
+    expect(JSON.parse(init.body)).toEqual({ songId: 5365, songDomain: "allSongs", version: "34", exScore: 3100, useOption: null, missCount: null });
+  });
+
+  it("使用オプションとミスカウントも送る", async () => {
+    token = "tok";
+    const fetchImpl = respond(200, { error: false, body: {} });
+    await syncScore("u1", chart, 3100, "34", { useOption: "RANDOM", missCount: 7 }, fetchImpl);
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toMatchObject({ useOption: "RANDOM", missCount: 7 });
   });
 
   it("自己ベストを上回っていない 400 は、エラーではなく「未更新」として扱う", async () => {
     token = "tok";
-    const r = await syncScore("u1", chart, 100, "34", respond(400, { error: true, errorMessage: "現在の自己ベストを上回っていません。" }));
+    const r = await syncScore("u1", chart, 100, "34", undefined, respond(400, { error: true, errorMessage: "現在の自己ベストを上回っていません。" }));
     expect(r).toEqual({ kind: "not-improved" });
   });
 
   it("それ以外の失敗・通信エラー・未サインインは error", async () => {
     token = "tok";
-    expect((await syncScore("u1", chart, 100, "34", respond(404, { error: true, errorMessage: "楽曲が見つかりませんでした。" }))).kind).toBe("error");
-    expect((await syncScore("u1", chart, 100, "34", vi.fn().mockRejectedValue(new Error("offline")))).kind).toBe("error");
+    expect((await syncScore("u1", chart, 100, "34", undefined, respond(404, { error: true, errorMessage: "楽曲が見つかりませんでした。" }))).kind).toBe("error");
+    expect((await syncScore("u1", chart, 100, "34", undefined, vi.fn().mockRejectedValue(new Error("offline")))).kind).toBe("error");
     token = null;
     const fetchImpl = vi.fn();
-    expect((await syncScore("u1", chart, 100, "34", fetchImpl)).kind).toBe("error");
+    expect((await syncScore("u1", chart, 100, "34", undefined, fetchImpl)).kind).toBe("error");
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
