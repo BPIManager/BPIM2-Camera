@@ -15,7 +15,7 @@ const REF_FRAMES: Record<"score" | "judge", Rect> = {
 };
 
 /** 読みたい欄 */
-export type PanelRegion = "useOption" | "fastSlow" | "missCount";
+export type PanelRegion = "useOption" | "fastSlow" | "missCount" | "clearType" | "clearTypeWide";
 
 const REF_REGIONS: Record<PanelRegion, Rect> = {
   // USE OPTION の見出しと値（DJ LEVEL のグラフの枠の下）
@@ -25,6 +25,11 @@ const REF_REGIONS: Record<PanelRegion, Rect> = {
   fastSlow: { x: 50, y: 1095, width: 300, height: 110 },
   // MISS COUNT の行の、今回の値のあたり（スコア欄の 1 行下）。ずれに備えて少し広く
   missCount: { x: 280, y: 830, width: 250, height: 100 },
+  // CLEAR TYPE の行（スコア欄の 2 行上）。左がベスト、右が今回のランプ。見出し（CLEAR TYPE）の右から、ずれに備えて上下に広く
+  clearType: { x: 150, y: 670, width: 380, height: 100 },
+  // 上で読めなかったときの読み直し用。少し下へ広げる（行が切り出しの下の端にかかる写真のため）。
+  // 写真 89 枚で、上だけなら 86 枚、こちらだけなら 87 枚、両方で 89 枚の今回のランプが読め、誤りはなかった
+  clearTypeWide: { x: 150, y: 680, width: 380, height: 120 },
 };
 
 const corners = (r: Rect) => [
@@ -50,5 +55,5 @@ export function panelRegions(frames: Pick<Record<GuideKey, Rect>, "score" | "jud
     if (x1 - x0 < 4 || y1 - y0 < 4 || (x1 - x0) * (y1 - y0) < full * 0.5) return null;
     return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
   };
-  return { useOption: place(REF_REGIONS.useOption), fastSlow: place(REF_REGIONS.fastSlow), missCount: place(REF_REGIONS.missCount) };
+  return { useOption: place(REF_REGIONS.useOption), fastSlow: place(REF_REGIONS.fastSlow), missCount: place(REF_REGIONS.missCount), clearType: place(REF_REGIONS.clearType), clearTypeWide: place(REF_REGIONS.clearTypeWide) };
 }
