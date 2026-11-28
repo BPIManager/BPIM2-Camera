@@ -118,6 +118,11 @@ export interface HistoryEntry {
   bpi: number | null;
   lastPlayed: string | null;
   version: string | null;
+  /** クリアランプ（"EX HARD CLEAR" など）。記録がなければ null */
+  clearState: string | null;
+  missCount: number | null;
+  /** 使用オプション（"RANDOM" など）。未設定なら null */
+  useOption: string | null;
 }
 
 interface RawScore {
@@ -125,6 +130,9 @@ interface RawScore {
   bpi: number | null;
   lastPlayed: string | null;
   version?: string | null;
+  clearState?: string | null;
+  missCount?: number | null;
+  useOption?: string | null;
 }
 
 /** 履歴 API は IIDX バージョンごとのグループで返す。新しい順の 1 本のリストにする */
@@ -134,7 +142,17 @@ export function flattenHistory(groups: Record<string, RawScore[]>): HistoryEntry
       scores.flatMap((s) =>
         s.exScore === null
           ? []
-          : [{ exScore: s.exScore, bpi: s.bpi === null ? null : Number(s.bpi), lastPlayed: s.lastPlayed, version: s.version ?? version }],
+          : [
+              {
+                exScore: s.exScore,
+                bpi: s.bpi === null ? null : Number(s.bpi),
+                lastPlayed: s.lastPlayed,
+                version: s.version ?? version,
+                clearState: s.clearState ?? null,
+                missCount: s.missCount ?? null,
+                useOption: s.useOption ?? null,
+              },
+            ],
       ),
     )
     .sort((a, b) => (b.lastPlayed ?? "").localeCompare(a.lastPlayed ?? ""));

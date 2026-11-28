@@ -19,7 +19,12 @@ import { emailLinkErrorMessage } from "@/lib/firebase/email";
 import { PRIVACY_URL, TERMS_URL } from "@/lib/links";
 import { resolvePlaySide, type Settings } from "@/lib/storage/settings";
 import type { Size } from "@/lib/vision/framing";
-import { GUIDE_LAYOUTS, inferSide, resolveLayout, type GuideLayout } from "@/lib/vision/guides";
+import {
+  GUIDE_LAYOUTS,
+  inferSide,
+  resolveLayout,
+  type GuideLayout,
+} from "@/lib/vision/guides";
 import PlaySidePicker from "@/components/play-side-picker";
 import BeatSeekerLinkPanel from "@/features/beatSeeker/BeatSeekerLinkPanel";
 import { useBeatSeekerLink } from "@/hooks/useBeatSeekerLink";
@@ -60,7 +65,7 @@ export function WelcomeStep({ onAgree }: { onAgree: () => void }) {
     <div className="flex min-h-full flex-col justify-between gap-8">
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
         <BrandMark />
-        <h1 className="text-2xl font-semibold">BPIM2 Camera</h1>
+        <h1 className="text-2xl font-semibold">IIDX Camera</h1>
         <p className="text-sm text-muted-foreground">
           リザルト画面の撮影をもっと便利に
         </p>
@@ -249,13 +254,19 @@ export function CalibrateStep({
       <CalibrateAnimation />
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium">プレーサイド</p>
-        <PlaySidePicker value={settings.playSide} inferred={settings.layout ? inferSide(settings.layout) : "1P"} onChange={(playSide) => update({ playSide, playSideChosen: true })} />
+        <PlaySidePicker
+          value={settings.playSide}
+          inferred={settings.layout ? inferSide(settings.layout) : "1P"}
+          onChange={(playSide) => update({ playSide, playSideChosen: true })}
+        />
       </div>
       <Alert variant="info">
         <Info />
         <AlertTitle>撮影画面でも調整できます</AlertTitle>
         <AlertDescription>
-          <p>カメラの映像の上でも、枠をなぞって動かしたり、四隅で大きさを変えたりできます。</p>
+          <p>
+            カメラの映像の上でも、枠をなぞって動かしたり、四隅で大きさを変えたりできます。
+          </p>
         </AlertDescription>
       </Alert>
       {done && (
@@ -305,7 +316,10 @@ export function CameraStep({
         </Button>
       }
     >
-      <CameraPicker value={settings.cameraId} onChange={(cameraId) => update({ cameraId })} />
+      <CameraPicker
+        value={settings.cameraId}
+        onChange={(cameraId) => update({ cameraId })}
+      />
     </Frame>
   );
 }
@@ -401,7 +415,12 @@ export function OptionsStep({
         <Button
           size="lg"
           onClick={() => {
-            update({ autoCapture: auto, saveToCameraRoll: save, syncTarget, resultTab });
+            update({
+              autoCapture: auto,
+              saveToCameraRoll: save,
+              syncTarget,
+              resultTab,
+            });
             onNext();
           }}
         >
@@ -433,9 +452,11 @@ export function OptionsStep({
           <SyncTargetPicker value={syncTarget} onChange={setSyncTarget} />
         </div>
         <div className="flex flex-col gap-2 py-3">
-          <Label>結果画面の最初のタブ</Label>
+          <Label>デフォルトタブ</Label>
           <p className="text-xs text-muted-foreground">
-            読み取り結果の下に最初に出すタブを選んでください。beat-seeker は、連携していないときは BPI を開きます。
+            読み取り結果でデフォルト表示するタブを選択してください。
+            <br />
+            beat-seekerを連携していない場合、BPIタブが常に表示されます。
           </p>
           <ResultTabPicker value={resultTab} onChange={setResultTab} />
         </div>
