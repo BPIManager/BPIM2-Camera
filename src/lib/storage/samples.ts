@@ -26,11 +26,17 @@ export async function countPendingSamples(includeImage = true): Promise<number> 
   return (await listSamples()).filter((s) => needsUpload(s, includeImage)).length;
 }
 
-/** 送信済みの印を付ける。送っている間に内容が変わっていた（rev が進んだ）ときは付けず、次の機会に送り直す */
-export async function markUploaded(id: string, rev: number, withImage: boolean, at = Date.now()): Promise<void> {
+/**
+ * 送信済みの印を付ける。送っている間に内容が変わっていた（rev が進んだ）ときは付けず、次の機会に送り直す。
+ * 写真の全体を送れたときは、端末の容量を使わないよう、写真は消して送った印だけ残す
+ */
+export async function markUploaded(id: string, rev: number, withImage: boolean, at = Date.now(), fullSent = false): Promise<void> {
   const db = await getDb();
   const s = await db.get("samples", id);
-  if (s && (s.rev ?? 0) === rev) await db.put("samples", { ...s, uploadedAt: at, uploadedWithImage: withImage });
+  if (!s || (s.rev ?? 0) !== rev) return;
+  const { fullImage, ...rest } = s;
+  const dropFull = fullSent && fullImage !== undefined;
+  await db.put("samples", { ...(dropFull ? rest : s), uploadedAt: at, uploadedWithImage: withImage, ...(dropFull ? { fullImageUploaded: true } : {}) });
 }
 
 /** 読み取り後に貯めたサンプルへ、ユーザーが確定した値（正解ラベル）を入れる。送信済みでも、送り直すよう未送信に戻す */

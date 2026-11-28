@@ -3,7 +3,7 @@ import type { TrainingSample } from "@/lib/storage/db";
 import { listSamples, markUploaded, needsUpload } from "@/lib/storage/samples";
 import { EXTRA_IMAGES, sampleLabel, type LabelImages } from "./exportZip";
 
-type PartName = "score" | "title" | "judge" | "labels" | "useOption" | "fastSlow" | "missCount";
+type PartName = "score" | "title" | "judge" | "labels" | "useOption" | "fastSlow" | "missCount" | "full";
 
 interface PresignedUpload {
   name: PartName;
@@ -32,23 +32,23 @@ export const uploadEndpoint = (): string => import.meta.env.VITE_STATS_UPLOAD_EN
 /** 送信してよい設定か。同意があるとき（画像を含めない設定なら、labels.json だけ送る） */
 export const canUpload = (s: Pick<Settings, "statsConsent">): boolean => s.statsConsent === true;
 
-/** 1 サンプルを送る。署名付き URL を 1 回で受け取り、画像とラベルを R2 へ直接 PUT する */
-export async function uploadSample(sample: TrainingSample, opts: UploadOptions): Promise<void> {
+/** 1 サンプルを送る。署名付き URL を 1 回で受け取り、画像とラベルを R2 へ直接 PUT する。写真の全体を送れたら true */
+export async function uploadSample(sample: TrainingSample, opts: UploadOptions): Promise<boolean> {
   try {
-    await uploadParts(sample, opts, true);
+    return await uploadParts(sample, opts, true);
   } catch (e) {
-    // 送信先の Worker が古く、パネルの中のほかの欄（使用オプション・FAST/SLOW・ミスカウント）の画像を受け付けないときは、それを除いて送り直す
-    if (e instanceof RejectedError && hasExtras(sample, opts)) await uploadParts(sample, opts, false);
-    else throw e;
+    // 送信先の Worker が古く、パネルの中のほかの欄の切り出しや写真の全体を受け付けないときは、それを除いて送り直す
+    if (e instanceof RejectedError && hasExtras(sample, opts)) return uploadParts(sample, opts, false);
+    throw e;
   }
 }
 
 /** 署名付き URL の発行を断られた（送るファイルの組が受け付けられない） */
 class RejectedError extends Error {}
 
-const hasExtras = (s: TrainingSample, { includeImage = true }: UploadOptions) => includeImage && EXTRA_IMAGES.some(([k]) => s.extraCrops?.[k]);
+const hasExtras = (s: TrainingSample, { includeImage = true }: UploadOptions) => includeImage && (!!s.fullImage || EXTRA_IMAGES.some(([k]) => s.extraCrops?.[k]));
 
-async function uploadParts(sample: TrainingSample, { endpoint, deviceId, includeImage = true, fetchImpl = fetch }: UploadOptions, withExtras: boolean): Promise<void> {
+async function uploadParts(sample: TrainingSample, { endpoint, deviceId, includeImage = true, fetchImpl = fetch }: UploadOptions, withExtras: boolean): Promise<boolean> {
   const extraNames: LabelImages = {};
   const parts: Partial<Record<PartName, Blob>> = {
     score: includeImage ? sample.scoreCrop : undefined,
@@ -63,6 +63,9 @@ async function uploadParts(sample: TrainingSample, { endpoint, deviceId, include
       // R2 では、Worker が「種類名.jpg」で保存する
       extraNames[`${k}Image`] = `${k}.jpg`;
     }
+    if (sample.fullImage) parts.full = sample.fullImage;
+    // 前に送り終えて端末から消したもの（確定して送り直すとき）も、R2 には残っているので名前を書く
+    if (sample.fullImage || sample.fullImageUploaded) extraNames.fullImage = "full.jpg";
   }
   parts.labels = new Blob(
     [
@@ -95,6 +98,7 @@ async function uploadParts(sample: TrainingSample, { endpoint, deviceId, include
     const put = await fetchImpl(target.url, { method: "PUT", headers: { "Content-Type": target.contentType }, body: parts[name] });
     if (!put.ok) throw new Error(`${name} を送信できません (${put.status})`);
   }
+  return parts.full !== undefined;
 }
 
 let inFlight: Promise<FlushResult> | null = null;
@@ -109,8 +113,8 @@ export function flushSamples(opts: UploadOptions): Promise<FlushResult> {
       for (const s of await listSamples()) {
         if (!needsUpload(s, opts.includeImage ?? true)) continue;
         try {
-          await uploadSample(s, opts);
-          await markUploaded(s.id, s.rev ?? 0, opts.includeImage ?? true);
+          const fullSent = await uploadSample(s, opts);
+          await markUploaded(s.id, s.rev ?? 0, opts.includeImage ?? true, Date.now(), fullSent);
           result.uploaded++;
         } catch {
           result.failed++;

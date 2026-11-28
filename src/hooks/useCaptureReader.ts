@@ -64,11 +64,12 @@ export function useCaptureReader({
     let optionPixels: ImageData | null = null;
     try {
       const full = await createImageBitmap(image);
-      // パネルの中のほかの欄（使用オプション・FAST/SLOW・ミスカウント）。枠の位置から求め、画像を閉じる前に切り出しておく
+      // パネルの中のほかの欄（使用オプション・ミスカウント）。枠の位置から求め、画像を閉じる前に切り出しておく。
+      // FAST/SLOW は、切り出さず全体の写真で集める（学習サンプルを貯めるときに作る）
       if (frames) {
         const at = panelRegions(frames, full);
         extraCrops = {};
-        for (const k of Object.keys(at) as PanelRegion[]) {
+        for (const k of ["useOption", "missCount"] as const satisfies readonly PanelRegion[]) {
           const r = at[k];
           if (r) extraCrops[k] = await cropBlob(full, r);
         }
