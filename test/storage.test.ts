@@ -86,3 +86,21 @@ describe("resolvePlaySide", () => {
     expect(resolvePlaySide({ playSide: "auto", layout: GUIDE_LAYOUTS["2P"] })).toBe("2P");
   });
 });
+
+describe("needsPlaySidePrompt", () => {
+  it("セットアップを済ませていて、まだプレーサイドを選んでいない人にだけ確かめる。旧版で 1P/2P を選んでいた人は選んだものとする", async () => {
+    const { needsPlaySidePrompt, loadSettings } = await import("@/lib/storage/settings");
+    const mem = (value: unknown) => {
+      const m = new Map<string, string>([["bpim2-camera:settings", JSON.stringify(value)]]);
+      return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
+    };
+    expect(needsPlaySidePrompt({ onboarded: true, playSideChosen: false })).toBe(true);
+    expect(needsPlaySidePrompt({ onboarded: true, playSideChosen: true })).toBe(false);
+    expect(needsPlaySidePrompt({ onboarded: false, playSideChosen: false })).toBe(false);
+    // これまで使っていた人（プレーサイドの保存値がない）は、自動のままで、まだ選んでいない
+    const before = loadSettings(mem({ onboarded: true }));
+    expect(before).toMatchObject({ playSide: "auto", playSideChosen: false });
+    // 旧版で選んでいた人
+    expect(loadSettings(mem({ onboarded: true, playSide: "2P" }))).toMatchObject({ playSide: "2P", playSideChosen: true });
+  });
+});

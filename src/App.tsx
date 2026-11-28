@@ -19,7 +19,8 @@ import { useSampleUpload } from "@/hooks/useSampleUpload";
 import { useSettings } from "@/hooks/useSettings";
 import type { Size } from "@/lib/vision/framing";
 import { resolveLayout } from "@/lib/vision/guides";
-import { resolvePlaySide } from "@/lib/storage/settings";
+import { needsPlaySidePrompt, resolvePlaySide } from "@/lib/storage/settings";
+import PlaySideDialog from "@/features/shell/PlaySideDialog";
 
 /** 撮影以外のタブは、タブ名のヘッダーを付ける（撮影はカメラ映像を全面に使う） */
 const HEADED_TABS: readonly Tab[] = ["history", "settings"];
@@ -97,7 +98,9 @@ export default function App() {
           }}
         />
       )}
-      {install.open && <InstallDialog mode={install.mode} onClose={install.close} />}
+      {/* これまで使っていた人に、プレーサイドを 1 回だけ選んでもらう。ホーム画面への追加の案内より先に出す */}
+      {needsPlaySidePrompt(settings) && <PlaySideDialog onChoose={(playSide) => update({ playSide, playSideChosen: true })} />}
+      {install.open && !needsPlaySidePrompt(settings) && <InstallDialog mode={install.mode} onClose={install.close} />}
       {reader.draft && <ResultDrawer key={reader.draft.id} draft={reader.draft} songs={songs} settings={settings} onClose={reader.closeDraft} />}
     </div>
   );

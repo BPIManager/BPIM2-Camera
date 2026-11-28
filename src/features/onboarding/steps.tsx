@@ -218,7 +218,7 @@ export function CalibrateStep({
       <CalibrateAnimation />
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium">プレーサイド</p>
-        <PlaySidePicker value={settings.playSide} inferred={settings.layout ? inferSide(settings.layout) : "1P"} onChange={(playSide) => update({ playSide })} />
+        <PlaySidePicker value={settings.playSide} inferred={settings.layout ? inferSide(settings.layout) : "1P"} onChange={(playSide) => update({ playSide, playSideChosen: true })} />
       </div>
       <Alert variant="info">
         <Info />
